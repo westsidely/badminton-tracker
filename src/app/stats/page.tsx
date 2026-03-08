@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
@@ -29,6 +29,8 @@ type PlayerOption = { id: string; display_name: string };
 
 export default function StatsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const playerFromUrl = searchParams.get("player");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<{ display_name: string | null } | null>(null);
   const [playerOptions, setPlayerOptions] = useState<PlayerOption[]>([]);
@@ -56,16 +58,18 @@ export default function StatsPage() {
           playerIds.add(m.challenger_id);
           playerIds.add(m.opponent_id);
         });
+        if (playerFromUrl) playerIds.add(playerFromUrl);
         if (playerIds.size > 0) {
           const { data: playerData } = await supabase.from("players").select("id, display_name").in("id", [...playerIds]);
           const opts = (playerData as PlayerOption[]) ?? [];
           setPlayerOptions(opts);
-          if (opts[0]) setSelectedPlayerId(opts[0].id);
+          const preferred = playerFromUrl && opts.some((o) => o.id === playerFromUrl) ? playerFromUrl : opts[0]?.id ?? "";
+          setSelectedPlayerId(preferred);
         }
         setLoading(false);
       });
     });
-  }, [router]);
+  }, [router, playerFromUrl]);
 
   if (loading || !session) {
     return (

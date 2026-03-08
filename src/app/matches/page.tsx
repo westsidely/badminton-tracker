@@ -33,6 +33,7 @@ export default function MatchesPage() {
   const [profile, setProfile] = useState<{ display_name: string | null } | null>(null);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [matchesError, setMatchesError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,6 +43,7 @@ export default function MatchesPage() {
         router.replace("/login");
         return;
       }
+      setMatchesError(null);
       Promise.all([
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
         supabase
@@ -50,7 +52,12 @@ export default function MatchesPage() {
           .order("created_at", { ascending: false }),
       ]).then(([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
-        setMatches((matchesRes.data as MatchRow[]) ?? []);
+        if (matchesRes.error) {
+          setMatchesError(matchesRes.error.message);
+          setMatches([]);
+        } else {
+          setMatches((matchesRes.data as MatchRow[]) ?? []);
+        }
         setLoading(false);
       });
     });
@@ -106,8 +113,13 @@ export default function MatchesPage() {
         </div>
 
         <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Your matches</h2>
+        {matchesError && (
+          <p className="mb-2 rounded-lg border border-amber-800 bg-amber-900/30 px-3 py-2 text-sm text-amber-200">
+            Could not load matches: {matchesError}
+          </p>
+        )}
         <ul className="space-y-2">
-          {matches.length === 0 && (
+          {matches.length === 0 && !matchesError && (
             <li className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-6 text-center text-sm text-zinc-500">
               No matches yet. Tap <strong className="text-zinc-400">New match</strong> to start tracking.
             </li>

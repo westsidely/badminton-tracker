@@ -56,12 +56,12 @@ export default function LeaderboardPage() {
           </Link>
         </div>
         <p className="mb-6 text-sm text-zinc-500">
-          Min 20 verified matches. Ranked by win %.
+          Top 10 by win % (verified matches). Ranked by win %, then verified count.
         </p>
 
         {rows.length === 0 ? (
           <p className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-6 text-center text-sm text-zinc-500">
-            No players with 20+ verified matches yet. Complete and verify matches to appear here.
+            No verified matches yet. Complete and verify matches to appear here.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -76,10 +76,15 @@ export default function LeaderboardPage() {
                     {r.display_name?.trim() || `Player ${i + 1}`}
                   </span>
                 </div>
-                <div className="mt-2 flex items-center justify-between text-sm">
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-sm">
                   <span className="text-emerald-400 font-medium">{r.win_pct}%</span>
                   <span className="text-zinc-400">{r.wins}–{r.losses}</span>
-                  <span className="text-zinc-500">{r.verified_matches} verified matches</span>
+                  <span className="text-zinc-500">
+                    {r.verified_matches} verified
+                    {Number(r.verified_matches) < 20 && (
+                      <span className="ml-1 text-amber-500/90">(below 20)</span>
+                    )}
+                  </span>
                 </div>
               </li>
             ))}
