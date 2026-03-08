@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 import { deriveScore, type PointSide } from "@/lib/scoreUtils";
+import { getPlayerDisplayName } from "@/lib/playerDisplay";
 
 type MatchRow = {
   id: string;
@@ -13,8 +14,10 @@ type MatchRow = {
   created_at: string;
   score_state: { pointHistory: PointSide[] };
   verification_status?: string;
-  challenger: { display_name: string }[];
-  opponent: { display_name: string }[];
+  challenger_id?: string;
+  opponent_id?: string;
+  challenger?: unknown;
+  opponent?: unknown;
 };
 
 export default function MatchesPage() {
@@ -36,7 +39,7 @@ export default function MatchesPage() {
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
         supabase
           .from("matches")
-          .select("id, status, created_at, score_state, verification_status, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+          .select("id, status, created_at, score_state, verification_status, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
           .order("created_at", { ascending: false }),
       ]).then(([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
@@ -111,7 +114,7 @@ export default function MatchesPage() {
                   className="block rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-zinc-50 active:bg-zinc-800"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{m.challenger?.[0]?.display_name ?? "?"} vs {m.opponent?.[0]?.display_name ?? "?"}</span>
+                    <span className="font-medium">{getPlayerDisplayName(m.challenger, m.challenger_id)} vs {getPlayerDisplayName(m.opponent, m.opponent_id)}</span>
                     {m.status !== "completed" && (
                       <span className="rounded bg-emerald-600/90 px-1.5 py-0.5 text-xs font-medium text-white">LIVE</span>
                     )}

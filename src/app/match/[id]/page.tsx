@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { deriveScore, POINT_REASONS, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
+import { getPlayerDisplayName } from "@/lib/playerDisplay";
 
 function getReasonLabel(reason: PointReason, otherName: string): string {
   switch (reason) {
@@ -35,8 +36,10 @@ type MatchRow = {
   score_state: { pointHistory: PointEntry[] };
   winner_side: string | null;
   verification_status?: VerificationStatus;
-  challenger: { display_name: string }[];
-  opponent: { display_name: string }[];
+  challenger_id?: string;
+  opponent_id?: string;
+  challenger?: unknown;
+  opponent?: unknown;
 };
 
 const LAYOUT_KEY = "badminton-match-layout";
@@ -76,7 +79,7 @@ export default function MatchPage() {
   const fetchMatch = useCallback(async () => {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, status, created_at, score_state, winner_side, verification_status, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+      .select("id, status, created_at, score_state, winner_side, verification_status, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
       .eq("id", id)
       .single();
     if (error || !data) {
@@ -181,8 +184,8 @@ export default function MatchPage() {
   const history = match.score_state?.pointHistory ?? [];
   const derived = deriveScore(history);
   const inProgress = match.status === "in_progress";
-  const challengerName = match.challenger?.[0]?.display_name ?? "Challenger";
-  const opponentName = match.opponent?.[0]?.display_name ?? "Opponent";
+  const challengerName = getPlayerDisplayName(match.challenger, match.challenger_id);
+  const opponentName = getPlayerDisplayName(match.opponent, match.opponent_id);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950">
