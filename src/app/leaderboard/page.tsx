@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 
 type LeaderboardRow = {
-  user_id: string;
+  player_id: string;
   display_name: string | null;
   verified_matches: number;
   wins: number;
@@ -67,7 +67,7 @@ export default function LeaderboardPage() {
           <ul className="space-y-2">
             {rows.map((r, i) => (
               <li
-                key={r.user_id}
+                key={r.player_id}
                 className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-3"
               >
                 <div className="flex items-center justify-between">

@@ -9,11 +9,12 @@ import { deriveScore, type PointSide } from "@/lib/scoreUtils";
 
 type MatchRow = {
   id: string;
-  opponent_name: string;
   status: string;
   created_at: string;
   score_state: { pointHistory: PointSide[] };
   verification_status?: string;
+  challenger: { display_name: string } | null;
+  opponent: { display_name: string } | null;
 };
 
 export default function MatchesPage() {
@@ -35,7 +36,7 @@ export default function MatchesPage() {
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
         supabase
           .from("matches")
-          .select("id, opponent_name, status, created_at, score_state, verification_status")
+          .select("id, status, created_at, score_state, verification_status, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
           .order("created_at", { ascending: false }),
       ]).then(([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
@@ -109,7 +110,7 @@ export default function MatchesPage() {
                   href={`/match/${m.id}`}
                   className="block rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-zinc-50 active:bg-zinc-800"
                 >
-                  <span className="font-medium">vs {m.opponent_name}</span>
+                  <span className="font-medium">{m.challenger?.display_name ?? "?"} vs {m.opponent?.display_name ?? "?"}</span>
                   <span className="ml-2 text-sm text-zinc-400">
                     {scoreStr}
                     {m.status === "completed" ? " ✓" : " (live)"}
