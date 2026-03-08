@@ -53,10 +53,12 @@ type MatchRow = {
   winner_side: string | null;
   verification_status?: VerificationStatus;
   end_reason?: string | null;
+  location_id?: string | null;
   challenger_id?: string;
   opponent_id?: string;
   challenger?: unknown;
   opponent?: unknown;
+  location?: { name: string } | null;
 };
 
 const LAYOUT_KEY = "badminton-match-layout";
@@ -102,7 +104,7 @@ export default function MatchPage() {
   const fetchMatch = useCallback(async () => {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, end_reason, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, end_reason, location_id, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name), location:locations!location_id(name)")
       .eq("id", id)
       .single();
     if (error || !data) {
@@ -264,8 +266,11 @@ export default function MatchPage() {
       </header>
 
       <div className="flex flex-1 flex-col">
-        {inProgress && match.created_at && (
+        {match.created_at && (
           <p className="px-4 pt-2 text-center text-xs text-zinc-500">{formatMatchStart(match.created_at)}</p>
+        )}
+        {match.location?.name && (
+          <p className="px-4 text-center text-xs text-zinc-500">{match.location.name}</p>
         )}
         <div className="flex items-center justify-center gap-4 py-3 text-center">
           {derived.games.map((g, i) => (

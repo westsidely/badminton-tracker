@@ -6,16 +6,22 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
 type Player = { id: string; display_name: string };
+type LocationRow = { id: string; name: string };
 
 export default function NewMatchPage() {
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>([]);
+  const [locations, setLocations] = useState<LocationRow[]>([]);
   const [challengerId, setChallengerId] = useState("");
   const [opponentId, setOpponentId] = useState("");
+  const [locationId, setLocationId] = useState("");
   const [newChallengerName, setNewChallengerName] = useState("");
   const [newOpponentName, setNewOpponentName] = useState("");
   const [useNewChallenger, setUseNewChallenger] = useState(false);
   const [useNewOpponent, setUseNewOpponent] = useState(false);
+  const [useNewLocation, setUseNewLocation] = useState(false);
+  const [newLocationName, setNewLocationName] = useState("");
+  const [newLocationAddress, setNewLocationAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
@@ -29,11 +35,13 @@ export default function NewMatchPage() {
 
   useEffect(() => {
     if (checking) return;
-    supabase
-      .from("players")
-      .select("id, display_name")
-      .order("display_name")
-      .then(({ data }) => setPlayers((data as Player[]) ?? []));
+    Promise.all([
+      supabase.from("players").select("id, display_name").order("display_name"),
+      supabase.from("locations").select("id, name").order("name"),
+    ]).then(([playersRes, locationsRes]) => {
+      setPlayers((playersRes.data as Player[]) ?? []);
+      setLocations((locationsRes.data as LocationRow[]) ?? []);
+    });
   }, [checking]);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -81,6 +89,20 @@ export default function NewMatchPage() {
       return;
     }
 
+    let locId: string | null = locationId || null;
+    if (useNewLocation && newLocationName.trim()) {
+      const { data: newLoc, error: locErr } = await supabase
+        .from("locations")
+        .insert({ name: newLocationName.trim(), address: newLocationAddress.trim() || null, created_by: user.id })
+        .select("id")
+        .single();
+      if (locErr) {
+        setError(locErr.message);
+        return;
+      }
+      locId = newLoc!.id;
+    }
+
     setLoading(true);
     setError(null);
     const { data, error: insertError } = await supabase
@@ -89,6 +111,7 @@ export default function NewMatchPage() {
         created_by: user.id,
         challenger_id: cId,
         opponent_id: oId,
+        location_id: locId,
         status: "in_progress",
         score_state: { pointHistory: [] },
       })
@@ -177,6 +200,46 @@ export default function NewMatchPage() {
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50 placeholder-zinc-500"
                 />
                 <button type="button" onClick={() => setUseNewOpponent(false)} className="text-xs text-zinc-500 underline">
+                  Choose existing
+                </button>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-zinc-400">Location (optional)</label>
+            {!useNewLocation ? (
+              <div className="space-y-2">
+                <select
+                  value={locationId}
+                  onChange={(e) => setLocationId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50"
+                >
+                  <option value="">No location</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={() => setUseNewLocation(true)} className="text-xs text-zinc-500 underline">
+                  Add new location
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newLocationName}
+                  onChange={(e) => setNewLocationName(e.target.value)}
+                  placeholder="Venue name"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50 placeholder-zinc-500"
+                />
+                <input
+                  type="text"
+                  value={newLocationAddress}
+                  onChange={(e) => setNewLocationAddress(e.target.value)}
+                  placeholder="Address (optional)"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50 placeholder-zinc-500"
+                />
+                <button type="button" onClick={() => { setUseNewLocation(false); setNewLocationName(""); setNewLocationAddress(""); }} className="text-xs text-zinc-500 underline">
                   Choose existing
                 </button>
               </div>

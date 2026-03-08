@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -15,10 +15,13 @@ type MatchRow = {
   score_state: { pointHistory: PointSide[] };
   verification_status?: string;
   end_reason?: string | null;
+  winner_side?: string | null;
   challenger_id?: string;
   opponent_id?: string;
   challenger?: unknown;
   opponent?: unknown;
+  location_id?: string | null;
+  location?: { name: string } | null;
 };
 
 const EARLY_END_LABELS: Record<string, string> = {
@@ -27,6 +30,18 @@ const EARLY_END_LABELS: Record<string, string> = {
   technical_other: "Technical",
 };
 
+type SortOrder = "recent" | "oldest";
+type StatusFilter = "all" | "live" | "completed" | "verified";
+type ResultFilter = "all" | "wins" | "losses";
+
+function formatMatchDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
 export default function MatchesPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -34,6 +49,10 @@ export default function MatchesPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("recent");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -48,7 +67,7 @@ export default function MatchesPage() {
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
         supabase
           .from("matches")
-          .select("id, status, created_at, score_state, verification_status, end_reason, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+          .select("id, status, created_at, score_state, verification_status, end_reason, winner_side, challenger_id, opponent_id, location_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name), location:locations!location_id(name)")
           .order("created_at", { ascending: false }),
       ]).then(([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
@@ -72,6 +91,27 @@ export default function MatchesPage() {
   }
 
   const displayName = profile?.display_name?.trim() || session.user?.email || "Signed in";
+
+  const filteredMatches = useMemo(() => {
+    let list = [...matches];
+    if (statusFilter === "live") list = list.filter((m) => m.status === "in_progress");
+    else if (statusFilter === "completed") list = list.filter((m) => m.status === "completed");
+    else if (statusFilter === "verified") list = list.filter((m) => m.status === "completed" && m.verification_status === "verified");
+    if (resultFilter === "wins") list = list.filter((m) => m.status === "completed" && m.winner_side === "left");
+    else if (resultFilter === "losses") list = list.filter((m) => m.status === "completed" && m.winner_side === "right");
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((m) => {
+        const challenger = getPlayerDisplayName(m.challenger, m.challenger_id).toLowerCase();
+        const opponent = getPlayerDisplayName(m.opponent, m.opponent_id).toLowerCase();
+        const dateStr = formatMatchDate(m.created_at).toLowerCase();
+        const locationName = (m.location as { name?: string } | null)?.name?.toLowerCase() ?? "";
+        return challenger.includes(q) || opponent.includes(q) || dateStr.includes(q) || locationName.includes(q);
+      });
+    }
+    if (sortOrder === "oldest") list.reverse();
+    return list;
+  }, [matches, sortOrder, statusFilter, resultFilter, searchQuery]);
 
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-6 pb-8">
@@ -118,13 +158,56 @@ export default function MatchesPage() {
             Could not load matches: {matchesError}
           </p>
         )}
+        <div className="mb-3 space-y-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by player, date, location"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-50 placeholder-zinc-500"
+          />
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-50"
+            >
+              <option value="recent">Most recent</option>
+              <option value="oldest">Oldest</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-50"
+            >
+              <option value="all">All</option>
+              <option value="live">Live</option>
+              <option value="completed">Completed</option>
+              <option value="verified">Verified</option>
+            </select>
+            <select
+              value={resultFilter}
+              onChange={(e) => setResultFilter(e.target.value as ResultFilter)}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-50"
+            >
+              <option value="all">All</option>
+              <option value="wins">Wins (challenger)</option>
+              <option value="losses">Losses (opponent)</option>
+            </select>
+          </div>
+        </div>
         <ul className="space-y-2">
           {matches.length === 0 && !matchesError && (
             <li className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-6 text-center text-sm text-zinc-500">
               No matches yet. Tap <strong className="text-zinc-400">New match</strong> to start tracking.
             </li>
           )}
-          {matches.map((m) => {
+          {filteredMatches.length === 0 && matches.length > 0 && !matchesError && (
+            <li className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-4 text-center text-sm text-zinc-500">
+              No matches match the current filters or search.
+            </li>
+          )}
+          {filteredMatches.map((m) => {
             const derived = deriveScore(m.score_state?.pointHistory ?? []);
             const scoreStr = derived.games.length > 0
               ? derived.games.map((g) => `${g.left}-${g.right}`).join(", ") +
@@ -154,6 +237,9 @@ export default function MatchesPage() {
                     {m.status === "completed" && " ✓"}
                     {m.status === "completed" && m.verification_status === "verified" && (
                       <span className="ml-1 text-emerald-500">· Verified</span>
+                    )}
+                    {(m.location as { name?: string } | null)?.name && (
+                      <span className="mt-0.5 block text-xs text-zinc-500">{(m.location as { name: string }).name}</span>
                     )}
                   </span>
                 </Link>

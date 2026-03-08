@@ -82,7 +82,7 @@ export default function LeaderboardPage() {
                   <span className="text-zinc-500">
                     {r.verified_matches} verified
                     {Number(r.verified_matches) < 20 && (
-                      <span className="ml-1 text-amber-500/90">(below 20)</span>
+                      <span className="ml-1 text-amber-500/90">· Not yet qualified</span>
                     )}
                   </span>
                 </div>
