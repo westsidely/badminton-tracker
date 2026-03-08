@@ -14,10 +14,17 @@ type MatchRow = {
   created_at: string;
   score_state: { pointHistory: PointSide[] };
   verification_status?: string;
+  end_reason?: string | null;
   challenger_id?: string;
   opponent_id?: string;
   challenger?: unknown;
   opponent?: unknown;
+};
+
+const EARLY_END_LABELS: Record<string, string> = {
+  opponent_retired: "Retired",
+  win_by_default: "Default",
+  technical_other: "Technical",
 };
 
 export default function MatchesPage() {
@@ -39,7 +46,7 @@ export default function MatchesPage() {
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
         supabase
           .from("matches")
-          .select("id, status, created_at, score_state, verification_status, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+          .select("id, status, created_at, score_state, verification_status, end_reason, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
           .order("created_at", { ascending: false }),
       ]).then(([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
@@ -123,6 +130,11 @@ export default function MatchesPage() {
                     <span className="font-medium">{getPlayerDisplayName(m.challenger, m.challenger_id)} vs {getPlayerDisplayName(m.opponent, m.opponent_id)}</span>
                     {m.status !== "completed" && (
                       <span className="rounded bg-emerald-600/90 px-1.5 py-0.5 text-xs font-medium text-white">LIVE</span>
+                    )}
+                    {m.status === "completed" && m.end_reason && m.end_reason !== "completed_normally" && (
+                      <span className="rounded bg-amber-600/80 px-1.5 py-0.5 text-xs font-medium text-white">
+                        {EARLY_END_LABELS[m.end_reason] ?? "Early end"}
+                      </span>
                     )}
                   </div>
                   <span className="mt-1 block text-sm text-zinc-400">

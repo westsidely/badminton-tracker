@@ -29,6 +29,21 @@ function normalizeHistory(raw: unknown): PointEntry[] {
 
 export type VerificationStatus = "unverified" | "pending" | "verified";
 
+export const END_REASONS = [
+  "completed_normally",
+  "opponent_retired",
+  "win_by_default",
+  "technical_other",
+] as const;
+export type EndReason = (typeof END_REASONS)[number];
+
+const END_REASON_LABELS: Record<EndReason, string> = {
+  completed_normally: "Completed normally",
+  opponent_retired: "Opponent retired / injured",
+  win_by_default: "Win by default",
+  technical_other: "Technical win / other",
+};
+
 type MatchRow = {
   id: string;
   status: string;
@@ -37,6 +52,7 @@ type MatchRow = {
   score_state: { pointHistory: PointEntry[] };
   winner_side: string | null;
   verification_status?: VerificationStatus;
+  end_reason?: string | null;
   challenger_id?: string;
   opponent_id?: string;
   challenger?: unknown;
@@ -68,6 +84,9 @@ export default function MatchPage() {
   const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
   const [reopenedJustNow, setReopenedJustNow] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [endReasonChoice, setEndReasonChoice] = useState<EndReason | null>(null);
+  const [endWinnerSide, setEndWinnerSide] = useState<PointSide | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -83,7 +102,7 @@ export default function MatchPage() {
   const fetchMatch = useCallback(async () => {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, end_reason, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
       .eq("id", id)
       .single();
     if (error || !data) {
@@ -154,17 +173,25 @@ export default function MatchPage() {
     setMatch((m) => (!m ? m : { ...m, score_state: { pointHistory: next } }));
   };
 
-  const endMatch = async () => {
+  const endMatchWithReason = async (reason: EndReason, winnerSide?: PointSide) => {
     if (!match || match.status !== "in_progress" || saving) return;
+    setShowEndModal(false);
+    setEndReasonChoice(null);
+    setEndWinnerSide(null);
     setPendingSide(null);
     setSaving(true);
     const derived = deriveScore(match.score_state?.pointHistory ?? []);
+    const winner =
+      reason === "completed_normally"
+        ? derived.matchOver ? derived.winnerSide : null
+        : winnerSide ?? null;
     const { error } = await supabase
       .from("matches")
       .update({
         status: "completed",
-        winner_side: derived.matchOver ? derived.winnerSide : null,
+        winner_side: winner,
         verification_status: "unverified",
+        end_reason: reason,
       })
       .eq("id", id);
     setSaving(false);
@@ -189,7 +216,7 @@ export default function MatchPage() {
     setSaving(true);
     const { error } = await supabase
       .from("matches")
-      .update({ status: "in_progress", winner_side: null })
+      .update({ status: "in_progress", winner_side: null, end_reason: null })
       .eq("id", id);
     setSaving(false);
     if (error) return;
@@ -253,18 +280,28 @@ export default function MatchPage() {
           )}
         </div>
 
-        {derived.matchOver && (
+        {(derived.matchOver || (!inProgress && match.winner_side)) && (
           <p className="text-center text-emerald-400">
-            Match over. {derived.winnerSide === "left" ? challengerName : opponentName} won.
+            Match over. {(match.winner_side ?? derived.winnerSide) === "left" ? challengerName : opponentName} won.
           </p>
         )}
 
         {!inProgress && (
-          <p className="text-center text-sm text-zinc-500">
-            {(match.verification_status ?? "unverified") === "verified" && "✓ Verified"}
-            {(match.verification_status ?? "unverified") === "pending" && "Pending verification"}
-            {(match.verification_status ?? "unverified") === "unverified" && "Unverified"}
-          </p>
+          <div className="space-y-1 text-center text-sm text-zinc-500">
+            <p>
+              {(match.verification_status ?? "unverified") === "verified" && "✓ Verified"}
+              {(match.verification_status ?? "unverified") === "pending" && "Pending verification"}
+              {(match.verification_status ?? "unverified") === "unverified" && "Unverified"}
+            </p>
+            {match.end_reason && (
+              <p className="text-zinc-400">
+                Ended: {END_REASON_LABELS[match.end_reason as EndReason] ?? match.end_reason}
+                {match.end_reason !== "completed_normally" && match.winner_side && (
+                  <> – {match.winner_side === "left" ? challengerName : opponentName} won</>
+                )}
+              </p>
+            )}
+          </div>
         )}
 
         {inProgress && isAdmin && reopenedJustNow && (
@@ -388,13 +425,74 @@ export default function MatchPage() {
               </button>
               <button
                 type="button"
-                onClick={endMatch}
+                onClick={() => setShowEndModal(true)}
                 disabled={saving}
                 className="flex-1 rounded-lg bg-zinc-600 py-3 text-sm font-medium text-zinc-50 active:bg-zinc-500"
               >
                 End match
               </button>
             </div>
+            {showEndModal && (
+              <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="How did the match end?">
+                <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
+                  <h2 className="mb-3 text-sm font-semibold text-zinc-50">How did the match end?</h2>
+                  {endReasonChoice === null ? (
+                    <div className="grid gap-2">
+                      {END_REASONS.map((reason) => (
+                        <button
+                          key={reason}
+                          type="button"
+                          onClick={() => {
+                            if (reason === "completed_normally") {
+                              endMatchWithReason("completed_normally");
+                            } else {
+                              setEndReasonChoice(reason);
+                            }
+                          }}
+                          className="rounded-xl bg-zinc-800 py-3 text-left text-sm text-zinc-50 touch-manipulation active:bg-zinc-700"
+                        >
+                          {END_REASON_LABELS[reason]}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setShowEndModal(false)}
+                        className="rounded-xl border border-zinc-600 py-2.5 text-sm text-zinc-400 touch-manipulation"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-zinc-400">Who won?</p>
+                      <div className="grid gap-2">
+                        <button
+                          type="button"
+                          onClick={() => endMatchWithReason(endReasonChoice!, "left")}
+                          className="rounded-xl bg-zinc-800 py-3 text-sm font-medium text-zinc-50 touch-manipulation active:bg-zinc-700"
+                        >
+                          {challengerName}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => endMatchWithReason(endReasonChoice!, "right")}
+                          className="rounded-xl bg-zinc-800 py-3 text-sm font-medium text-zinc-50 touch-manipulation active:bg-zinc-700"
+                        >
+                          {opponentName}
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEndReasonChoice(null)}
+                        className="w-full rounded-xl border border-zinc-600 py-2 text-sm text-zinc-400 touch-manipulation"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
 
