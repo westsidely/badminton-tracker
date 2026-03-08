@@ -110,10 +110,15 @@ export default function MatchesPage() {
                   href={`/match/${m.id}`}
                   className="block rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-zinc-50 active:bg-zinc-800"
                 >
-                  <span className="font-medium">{m.challenger?.[0]?.display_name ?? "?"} vs {m.opponent?.[0]?.display_name ?? "?"}</span>
-                  <span className="ml-2 text-sm text-zinc-400">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{m.challenger?.[0]?.display_name ?? "?"} vs {m.opponent?.[0]?.display_name ?? "?"}</span>
+                    {m.status !== "completed" && (
+                      <span className="rounded bg-emerald-600/90 px-1.5 py-0.5 text-xs font-medium text-white">LIVE</span>
+                    )}
+                  </div>
+                  <span className="mt-1 block text-sm text-zinc-400">
                     {scoreStr}
-                    {m.status === "completed" ? " ✓" : " (live)"}
+                    {m.status === "completed" && " ✓"}
                     {m.status === "completed" && m.verification_status === "verified" && (
                       <span className="ml-1 text-emerald-500">· Verified</span>
                     )}

@@ -6,13 +6,16 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { deriveScore, POINT_REASONS, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
 
-const REASON_LABELS: Record<PointReason, string> = {
-  winner: "Winner",
-  opponent_unforced_error: "Opponent Unforced Error",
-  forced_error: "Forced Error",
-  service_error: "Service Error",
-  lucky: "Lucky (net cord)",
-};
+function getReasonLabel(reason: PointReason, otherName: string): string {
+  switch (reason) {
+    case "winner": return "Winner";
+    case "opponent_unforced_error": return `Unforced error by ${otherName}`;
+    case "forced_error": return "Forced error (opponent forced into error)";
+    case "service_error": return `Service error by ${otherName}`;
+    case "lucky": return "Lucky shot (net cord, etc.)";
+    default: return reason;
+  }
+}
 
 function normalizeHistory(raw: unknown): PointEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -28,12 +31,26 @@ export type VerificationStatus = "unverified" | "pending" | "verified";
 type MatchRow = {
   id: string;
   status: string;
+  created_at: string;
   score_state: { pointHistory: PointEntry[] };
   winner_side: string | null;
   verification_status?: VerificationStatus;
   challenger: { display_name: string }[];
   opponent: { display_name: string }[];
 };
+
+const LAYOUT_KEY = "badminton-match-layout";
+
+function formatMatchStart(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    return sameDay ? `Started ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : `Started ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  } catch {
+    return "";
+  }
+}
 
 export default function MatchPage() {
   const params = useParams();
@@ -43,11 +60,23 @@ export default function MatchPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pendingSide, setPendingSide] = useState<PointSide | null>(null);
+  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem(LAYOUT_KEY) as "vertical" | "horizontal" | null;
+    if (stored === "vertical" || stored === "horizontal") setLayout(stored);
+  }, []);
+
+  const setLayoutAndStore = (value: "vertical" | "horizontal") => {
+    setLayout(value);
+    if (typeof window !== "undefined") localStorage.setItem(LAYOUT_KEY, value);
+  };
 
   const fetchMatch = useCallback(async () => {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, status, score_state, winner_side, verification_status, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+      .select("id, status, created_at, score_state, winner_side, verification_status, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
       .eq("id", id)
       .single();
     if (error || !data) {
@@ -152,16 +181,21 @@ export default function MatchPage() {
   const history = match.score_state?.pointHistory ?? [];
   const derived = deriveScore(history);
   const inProgress = match.status === "in_progress";
+  const challengerName = match.challenger?.[0]?.display_name ?? "Challenger";
+  const opponentName = match.opponent?.[0]?.display_name ?? "Opponent";
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950">
       <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <Link href="/matches" className="text-sm text-zinc-400 underline active:text-zinc-300">← Matches</Link>
-        <span className="text-sm text-zinc-500">{match.challenger?.[0]?.display_name ?? "?"} vs {match.opponent?.[0]?.display_name ?? "?"}</span>
+        <span className="text-sm text-zinc-500">{challengerName} vs {opponentName}</span>
       </header>
 
       <div className="flex flex-1 flex-col">
-        <div className="flex items-center justify-center gap-4 py-4 text-center">
+        {inProgress && match.created_at && (
+          <p className="px-4 pt-2 text-center text-xs text-zinc-500">{formatMatchStart(match.created_at)}</p>
+        )}
+        <div className="flex items-center justify-center gap-4 py-3 text-center">
           {derived.games.map((g, i) => (
             <span key={i} className="text-lg font-medium text-zinc-300">
               {g.left}-{g.right}
@@ -176,7 +210,7 @@ export default function MatchPage() {
 
         {derived.matchOver && (
           <p className="text-center text-emerald-400">
-            Match over. {derived.winnerSide === "left" ? (match.challenger?.[0]?.display_name ?? "Challenger") : (match.opponent?.[0]?.display_name ?? "Opponent")} won.
+            Match over. {derived.winnerSide === "left" ? challengerName : opponentName} won.
           </p>
         )}
 
@@ -190,31 +224,83 @@ export default function MatchPage() {
 
         {inProgress && (
           <>
-            <p className="px-4 py-2 text-center text-xs text-zinc-500">
-              Tap left ({match.challenger?.[0]?.display_name ?? "challenger"}) or right ({match.opponent?.[0]?.display_name ?? "opponent"}) to add a point
-            </p>
-            <div className="flex flex-1">
+            <div className="flex items-center justify-center gap-2 py-2">
+              <span className="text-xs text-zinc-500">Court</span>
               <button
                 type="button"
-                onClick={() => !derived.matchOver && setPendingSide("left")}
-                disabled={saving || derived.matchOver}
-                className="flex-1 touch-manipulation bg-zinc-800/50 active:bg-zinc-700 disabled:opacity-50"
-                aria-label="Point for you (left)"
-              />
+                onClick={() => setLayoutAndStore("vertical")}
+                className={`rounded px-2 py-1 text-xs font-medium ${layout === "vertical" ? "bg-zinc-600 text-zinc-50" : "text-zinc-500"}`}
+              >
+                Vertical
+              </button>
               <button
                 type="button"
-                onClick={() => !derived.matchOver && setPendingSide("right")}
-                disabled={saving || derived.matchOver}
-                className="flex-1 touch-manipulation bg-zinc-800 active:bg-zinc-700 disabled:opacity-50"
-                aria-label="Point for opponent (right)"
-              />
+                onClick={() => setLayoutAndStore("horizontal")}
+                className={`rounded px-2 py-1 text-xs font-medium ${layout === "horizontal" ? "bg-zinc-600 text-zinc-50" : "text-zinc-500"}`}
+              >
+                Horizontal
+              </button>
             </div>
+            <div className={`mx-4 flex overflow-hidden rounded-xl border-2 border-zinc-700 ${layout === "vertical" ? "max-h-52 flex-1 flex-col" : "max-h-56 flex-1 flex-row"}`}>
+              {layout === "vertical" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => !derived.matchOver && setPendingSide("left")}
+                    disabled={saving || derived.matchOver}
+                    className="flex flex-1 flex-col items-center justify-center border-b-2 border-zinc-700 bg-zinc-800/50 py-4 touch-manipulation active:bg-zinc-700 disabled:opacity-50"
+                    aria-label={`Award point to ${challengerName}`}
+                  >
+                    <span className="text-base font-semibold text-zinc-50">{challengerName}</span>
+                    <span className="mt-1 text-xs text-zinc-400">Tap to award point</span>
+                  </button>
+                  <div className="h-0.5 shrink-0 bg-zinc-600" aria-hidden />
+                  <button
+                    type="button"
+                    onClick={() => !derived.matchOver && setPendingSide("right")}
+                    disabled={saving || derived.matchOver}
+                    className="flex flex-1 flex-col items-center justify-center bg-zinc-800 py-4 touch-manipulation active:bg-zinc-700 disabled:opacity-50"
+                    aria-label={`Award point to ${opponentName}`}
+                  >
+                    <span className="text-base font-semibold text-zinc-50">{opponentName}</span>
+                    <span className="mt-1 text-xs text-zinc-400">Tap to award point</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => !derived.matchOver && setPendingSide("left")}
+                    disabled={saving || derived.matchOver}
+                    className="flex flex-1 flex-col items-center justify-center border-r-2 border-zinc-700 bg-zinc-800/50 py-4 touch-manipulation active:bg-zinc-700 disabled:opacity-50"
+                    aria-label={`Award point to ${challengerName}`}
+                  >
+                    <span className="text-base font-semibold text-zinc-50">{challengerName}</span>
+                    <span className="mt-1 text-xs text-zinc-400">Tap to award point</span>
+                  </button>
+                  <div className="w-0.5 shrink-0 bg-zinc-600 self-stretch" aria-hidden />
+                  <button
+                    type="button"
+                    onClick={() => !derived.matchOver && setPendingSide("right")}
+                    disabled={saving || derived.matchOver}
+                    className="flex flex-1 flex-col items-center justify-center bg-zinc-800 py-4 touch-manipulation active:bg-zinc-700 disabled:opacity-50"
+                    aria-label={`Award point to ${opponentName}`}
+                  >
+                    <span className="text-base font-semibold text-zinc-50">{opponentName}</span>
+                    <span className="mt-1 text-xs text-zinc-400">Tap to award point</span>
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="px-4 py-1 text-center text-xs text-zinc-500">
+              Tap a name to award a point, then choose reason
+            </p>
 
             {pendingSide !== null && (
               <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Point reason">
                 <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
-                  <p className="mb-3 text-center text-sm text-zinc-400">
-                    Point to {pendingSide === "left" ? "you" : "opponent"}
+                  <p className="mb-3 text-center text-sm font-medium text-zinc-50">
+                    Award point to {pendingSide === "left" ? challengerName : opponentName}
                   </p>
                   <div className="grid gap-2">
                     {POINT_REASONS.map((reason) => (
@@ -222,9 +308,9 @@ export default function MatchPage() {
                         key={reason}
                         type="button"
                         onClick={() => addPoint(pendingSide, reason)}
-                        className="rounded-xl bg-zinc-800 py-3 text-sm font-medium text-zinc-50 touch-manipulation active:bg-zinc-700"
+                        className="rounded-xl bg-zinc-800 py-3 text-left text-sm text-zinc-50 touch-manipulation active:bg-zinc-700"
                       >
-                        {REASON_LABELS[reason]}
+                        {getReasonLabel(reason, pendingSide === "left" ? opponentName : challengerName)}
                       </button>
                     ))}
                     <button
