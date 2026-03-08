@@ -58,7 +58,7 @@ type MatchRow = {
   opponent_id?: string;
   challenger?: unknown;
   opponent?: unknown;
-  location?: { name: string } | null;
+  location?: { name: string }[];
 };
 
 const LAYOUT_KEY = "badminton-match-layout";
@@ -269,8 +269,8 @@ export default function MatchPage() {
         {match.created_at && (
           <p className="px-4 pt-2 text-center text-xs text-zinc-500">{formatMatchStart(match.created_at)}</p>
         )}
-        {match.location?.name && (
-          <p className="px-4 text-center text-xs text-zinc-500">{match.location.name}</p>
+        {match.location?.[0]?.name && (
+          <p className="px-4 text-center text-xs text-zinc-500">{match.location[0].name}</p>
         )}
         <div className="flex items-center justify-center gap-4 py-3 text-center">
           {derived.games.map((g, i) => (

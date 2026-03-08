@@ -21,7 +21,7 @@ type MatchRow = {
   challenger?: unknown;
   opponent?: unknown;
   location_id?: string | null;
-  location?: { name: string } | null;
+  location?: { name: string }[];
 };
 
 const EARLY_END_LABELS: Record<string, string> = {
@@ -105,7 +105,7 @@ export default function MatchesPage() {
         const challenger = getPlayerDisplayName(m.challenger, m.challenger_id).toLowerCase();
         const opponent = getPlayerDisplayName(m.opponent, m.opponent_id).toLowerCase();
         const dateStr = formatMatchDate(m.created_at).toLowerCase();
-        const locationName = (m.location as { name?: string } | null)?.name?.toLowerCase() ?? "";
+        const locationName = m.location?.[0]?.name?.toLowerCase() ?? "";
         return challenger.includes(q) || opponent.includes(q) || dateStr.includes(q) || locationName.includes(q);
       });
     }
@@ -238,8 +238,8 @@ export default function MatchesPage() {
                     {m.status === "completed" && m.verification_status === "verified" && (
                       <span className="ml-1 text-emerald-500">· Verified</span>
                     )}
-                    {(m.location as { name?: string } | null)?.name && (
-                      <span className="mt-0.5 block text-xs text-zinc-500">{(m.location as { name: string }).name}</span>
+                    {m.location?.[0]?.name && (
+                      <span className="mt-0.5 block text-xs text-zinc-500">{m.location[0].name}</span>
                     )}
                   </span>
                 </Link>
