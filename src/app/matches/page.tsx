@@ -77,8 +77,8 @@ export default function MatchesPage() {
           setMatches([]);
         } else {
           const data = matchesRes.data;
-          const list = Array.isArray(data) ? data.filter((m): m is MatchRow => m != null && typeof m === "object" && typeof (m as MatchRow).id === "string") : [];
-          setMatches(list);
+          const list = Array.isArray(data) ? data.filter((m) => m != null && typeof m === "object" && typeof (m as Record<string, unknown>).id === "string") : [];
+          setMatches(list as MatchRow[]);
         }
         setLoading(false);
       }).catch((err) => {
