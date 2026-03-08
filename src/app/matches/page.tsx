@@ -89,16 +89,6 @@ export default function MatchesPage() {
     });
   }, [router]);
 
-  if (loading || !session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <p className="text-zinc-400">Loading…</p>
-      </div>
-    );
-  }
-
-  const displayName = profile?.display_name?.trim() || session.user?.email || "Signed in";
-
   const filteredMatches = useMemo(() => {
     let list = [...matches];
     if (statusFilter === "live") list = list.filter((m) => m.status === "in_progress");
@@ -119,6 +109,16 @@ export default function MatchesPage() {
     if (sortOrder === "oldest") list.reverse();
     return list;
   }, [matches, sortOrder, statusFilter, resultFilter, searchQuery]);
+
+  if (loading || !session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <p className="text-zinc-400">Loading…</p>
+      </div>
+    );
+  }
+
+  const displayName = profile?.display_name?.trim() || session.user?.email || "Signed in";
 
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-6 pb-8">
