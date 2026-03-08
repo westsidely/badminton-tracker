@@ -76,8 +76,14 @@ export default function MatchesPage() {
           setMatchesError(matchesRes.error.message);
           setMatches([]);
         } else {
-          setMatches((matchesRes.data as MatchRow[]) ?? []);
+          const data = matchesRes.data;
+          const list = Array.isArray(data) ? data.filter((m): m is MatchRow => m != null && typeof m === "object" && typeof (m as MatchRow).id === "string") : [];
+          setMatches(list);
         }
+        setLoading(false);
+      }).catch((err) => {
+        setMatchesError(err?.message ?? "Failed to load matches");
+        setMatches([]);
         setLoading(false);
       });
     });

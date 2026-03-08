@@ -48,14 +48,20 @@ function gameWon(left: number, right: number): PointSide | null {
   return null;
 }
 
-export function deriveScore(pointHistory: (PointEntry | PointSide)[]): DerivedScore {
+function ensurePointHistoryArray(value: unknown): (PointEntry | PointSide)[] {
+  if (Array.isArray(value)) return value;
+  return [];
+}
+
+export function deriveScore(pointHistory: (PointEntry | PointSide)[] | unknown): DerivedScore {
+  const list = ensurePointHistoryArray(pointHistory);
   const games: GameScore[] = [];
   let current = { left: 0, right: 0 };
   let gameIndex = 0;
   let leftWins = 0;
   let rightWins = 0;
 
-  for (const entry of pointHistory) {
+  for (const entry of list) {
     const side = toSide(entry);
     if (side === "left") current.left++;
     else current.right++;

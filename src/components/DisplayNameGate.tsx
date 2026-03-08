@@ -42,17 +42,20 @@ export function DisplayNameGate({ children }: { children: React.ReactNode }) {
   if (!session) return <>{children}</>;
   if (profile?.display_name?.trim()) return <>{children}</>;
 
+  const userId = session?.user?.id;
+  if (!userId) return <>{children}</>;
+
   const refetchProfile = () => {
     supabase
       .from("profiles")
       .select("id, display_name")
-      .eq("id", session.user.id)
+      .eq("id", userId)
       .single()
       .then(({ data }) => setProfile((data as Profile) ?? null));
   };
 
   return (
-    <SetDisplayNamePrompt userId={session.user.id} onSaved={refetchProfile} />
+    <SetDisplayNamePrompt userId={userId} onSaved={refetchProfile} />
   );
 }
 
