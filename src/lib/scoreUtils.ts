@@ -22,6 +22,12 @@ export function toSide(entry: PointEntry | PointSide): PointSide {
   return typeof entry === "string" ? entry : entry.side;
 }
 
+export function normalizeEntry(entry: unknown): PointEntry {
+  if (typeof entry === "string") return { side: entry as PointSide, reason: "winner" };
+  const e = entry as { side?: string; reason?: string };
+  return { side: (e.side ?? "left") as PointSide, reason: (e.reason ?? "winner") as PointReason };
+}
+
 export interface GameScore {
   left: number;
   right: number;
