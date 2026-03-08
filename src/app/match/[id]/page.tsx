@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { deriveScore, POINT_REASONS, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
 import { getPlayerDisplayName } from "@/lib/playerDisplay";
+import { getLocationName } from "@/lib/locationDisplay";
 
 function getReasonLabel(reason: PointReason, otherName: string): string {
   switch (reason) {
@@ -257,6 +258,7 @@ export default function MatchPage() {
   const inProgress = match.status === "in_progress";
   const challengerName = getPlayerDisplayName(match.challenger, match.challenger_id);
   const opponentName = getPlayerDisplayName(match.opponent, match.opponent_id);
+  const matchLocationName = getLocationName(match.location);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950">
@@ -269,8 +271,8 @@ export default function MatchPage() {
         {match.created_at && (
           <p className="px-4 pt-2 text-center text-xs text-zinc-500">{formatMatchStart(match.created_at)}</p>
         )}
-        {match.location?.[0]?.name && (
-          <p className="px-4 text-center text-xs text-zinc-500">{match.location[0].name}</p>
+        {matchLocationName && (
+          <p className="px-4 text-center text-xs text-zinc-500">{matchLocationName}</p>
         )}
         <div className="flex items-center justify-center gap-4 py-3 text-center">
           {derived.games.map((g, i) => (

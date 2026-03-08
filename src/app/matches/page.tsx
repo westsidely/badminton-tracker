@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 import { deriveScore, type PointSide } from "@/lib/scoreUtils";
 import { getPlayerDisplayName } from "@/lib/playerDisplay";
+import { getLocationName } from "@/lib/locationDisplay";
 
 type MatchRow = {
   id: string;
@@ -105,7 +106,7 @@ export default function MatchesPage() {
         const challenger = getPlayerDisplayName(m.challenger, m.challenger_id).toLowerCase();
         const opponent = getPlayerDisplayName(m.opponent, m.opponent_id).toLowerCase();
         const dateStr = formatMatchDate(m.created_at).toLowerCase();
-        const locationName = m.location?.[0]?.name?.toLowerCase() ?? "";
+        const locationName = (getLocationName(m.location) ?? "").toLowerCase();
         return challenger.includes(q) || opponent.includes(q) || dateStr.includes(q) || locationName.includes(q);
       });
     }
@@ -209,6 +210,7 @@ export default function MatchesPage() {
           )}
           {filteredMatches.map((m) => {
             const derived = deriveScore(m.score_state?.pointHistory ?? []);
+            const locationName = getLocationName(m.location);
             const scoreStr = derived.games.length > 0
               ? derived.games.map((g) => `${g.left}-${g.right}`).join(", ") +
                 (derived.games.length < 3 && !derived.matchOver
@@ -238,8 +240,8 @@ export default function MatchesPage() {
                     {m.status === "completed" && m.verification_status === "verified" && (
                       <span className="ml-1 text-emerald-500">· Verified</span>
                     )}
-                    {m.location?.[0]?.name && (
-                      <span className="mt-0.5 block text-xs text-zinc-500">{m.location[0].name}</span>
+                    {locationName && (
+                      <span className="mt-0.5 block text-xs text-zinc-500">{locationName}</span>
                     )}
                   </span>
                 </Link>
