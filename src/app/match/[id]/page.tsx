@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { deriveScore, POINT_REASONS, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
-import { getPlayerDisplayName } from "@/lib/playerDisplay";
+import { getPlayerDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
 import { getLocationName } from "@/lib/locationDisplay";
 
 function getReasonLabel(reason: PointReason, otherName: string): string {
@@ -54,6 +54,8 @@ type MatchRow = {
   winner_side: string | null;
   verification_status?: VerificationStatus;
   end_reason?: string | null;
+  match_type?: string | null;
+  tournament_name?: string | null;
   location_id?: string | null;
   challenger_id?: string;
   opponent_id?: string;
@@ -105,7 +107,7 @@ export default function MatchPage() {
   const fetchMatch = useCallback(async () => {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, end_reason, location_id, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name), location:locations!location_id(name)")
+      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, end_reason, location_id, match_type, tournament_name, challenger_id, opponent_id, challenger:players!challenger_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent:players!opponent_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), location:locations!location_id(name)")
       .eq("id", id)
       .single();
     if (error || !data) {
@@ -264,7 +266,17 @@ export default function MatchPage() {
     <div className="flex min-h-screen flex-col bg-zinc-950">
       <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <Link href="/matches" className="text-sm text-zinc-400 underline active:text-zinc-300">← Matches</Link>
-        <span className="text-sm text-zinc-500">{challengerName} vs {opponentName}</span>
+        <span className="text-sm text-zinc-500">
+          {challengerName}
+          {getPlayerRepresentationLabel(match.challenger) && (
+            <span className="ml-1 text-xs text-zinc-400">({getPlayerRepresentationLabel(match.challenger)})</span>
+          )}{" "}
+          vs{" "}
+          {opponentName}
+          {getPlayerRepresentationLabel(match.opponent) && (
+            <span className="ml-1 text-xs text-zinc-400">({getPlayerRepresentationLabel(match.opponent)})</span>
+          )}
+        </span>
       </header>
 
       <div className="flex flex-1 flex-col">
@@ -272,7 +284,9 @@ export default function MatchPage() {
           <p className="px-4 pt-2 text-center text-xs text-zinc-500">{formatMatchStart(match.created_at)}</p>
         )}
         <p className="px-4 text-center text-xs text-zinc-500">
-          {matchLocationName ?? "No venue indicated"}
+          {match.match_type === "tournament"
+            ? `Tournament${match.tournament_name?.trim() ? ` · ${match.tournament_name.trim()}` : " · Tournament match"} · ${matchLocationName ?? "No venue indicated"}`
+            : `Recreational · ${matchLocationName ?? "No venue indicated"}`}
         </p>
         <div className="flex items-center justify-center gap-4 py-3 text-center">
           {derived.games.map((g, i) => (

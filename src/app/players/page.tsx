@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 
-type PlayerRow = { id: string; display_name: string };
+type PlayerRow = { id: string; display_name: string; represented_as?: string | null };
 
 type LeaderboardRow = { player_id: string; verified_matches: number };
 type MatchRow = { challenger_id: string; opponent_id: string; winner_side: string | null; verification_status?: string };
@@ -22,6 +22,7 @@ export default function PlayersPage() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [editRepresentedAs, setEditRepresentedAs] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -32,7 +33,7 @@ export default function PlayersPage() {
         return;
       }
       Promise.all([
-        supabase.from("players").select("id, display_name").order("display_name"),
+        supabase.from("players").select("id, display_name, represented_as").order("display_name"),
         supabase.from("matches").select("challenger_id, opponent_id, winner_side, verification_status").eq("status", "completed"),
         supabase.rpc("get_leaderboard"),
       ]).then(([playersRes, matchesRes, lbRes]) => {
@@ -70,17 +71,19 @@ export default function PlayersPage() {
     setCreating(false);
     if (error) return;
     setNewName("");
-    const { data } = await supabase.from("players").select("id, display_name").order("display_name");
+    const { data } = await supabase.from("players").select("id, display_name, represented_as").order("display_name");
     setPlayers((data as PlayerRow[]) ?? []);
   };
 
   const handleUpdate = async (playerId: string) => {
     const trimmed = editName.trim();
     if (!trimmed) return;
-    const { error } = await supabase.from("players").update({ display_name: trimmed }).eq("id", playerId);
+    const rep = editRepresentedAs.trim() || null;
+    const { error } = await supabase.from("players").update({ display_name: trimmed, represented_as: rep }).eq("id", playerId);
     if (error) return;
     setEditingId(null);
-    setPlayers((prev) => prev.map((p) => (p.id === playerId ? { ...p, display_name: trimmed } : p)));
+    setEditRepresentedAs("");
+    setPlayers((prev) => prev.map((p) => (p.id === playerId ? { ...p, display_name: trimmed, represented_as: rep } : p)));
   };
 
   const getPlayerNote = (playerId: string) => {
@@ -141,15 +144,23 @@ export default function PlayersPage() {
             return (
               <li key={p.id} className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2.5">
                 {editingId === p.id ? (
-                  <div className="flex items-center justify-between">
+                  <div className="space-y-2">
                     <input
                       type="text"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="flex-1 rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-sm text-zinc-50"
+                      placeholder="Display name"
+                      className="w-full rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-sm text-zinc-50"
                       autoFocus
                     />
-                    <div className="ml-2 flex gap-1">
+                    <input
+                      type="text"
+                      value={editRepresentedAs}
+                      onChange={(e) => setEditRepresentedAs(e.target.value)}
+                      placeholder="Representation (e.g. UCLA, Club name)"
+                      className="w-full rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-sm text-zinc-50 placeholder-zinc-500"
+                    />
+                    <div className="flex gap-1">
                       <button
                         type="button"
                         onClick={() => handleUpdate(p.id)}
@@ -159,7 +170,7 @@ export default function PlayersPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setEditingId(null); setEditName(""); }}
+                        onClick={() => { setEditingId(null); setEditName(""); setEditRepresentedAs(""); }}
                         className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-400"
                       >
                         Cancel
@@ -175,11 +186,12 @@ export default function PlayersPage() {
                       {p.display_name}
                     </Link>
                     <div className="flex shrink-0 items-center gap-2">
+                      {p.represented_as && <span className="text-xs text-zinc-500">({p.represented_as})</span>}
                       <span className="text-sm text-zinc-400">{wins}–{losses}</span>
                       {note && <span className="text-xs text-zinc-500">{note}</span>}
                       <button
                         type="button"
-                        onClick={(e) => { e.preventDefault(); setEditingId(p.id); setEditName(p.display_name); }}
+                        onClick={(e) => { e.preventDefault(); setEditingId(p.id); setEditName(p.display_name); setEditRepresentedAs(p.represented_as ?? ""); }}
                         className="text-xs text-zinc-400 underline"
                       >
                         Edit

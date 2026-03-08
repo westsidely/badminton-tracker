@@ -15,6 +15,8 @@ export default function NewMatchPage() {
   const [challengerId, setChallengerId] = useState("");
   const [opponentId, setOpponentId] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [matchType, setMatchType] = useState<"recreational" | "tournament">("recreational");
+  const [tournamentName, setTournamentName] = useState("");
   const [newChallengerName, setNewChallengerName] = useState("");
   const [newOpponentName, setNewOpponentName] = useState("");
   const [useNewChallenger, setUseNewChallenger] = useState(false);
@@ -112,6 +114,8 @@ export default function NewMatchPage() {
         challenger_id: cId,
         opponent_id: oId,
         location_id: locId,
+        match_type: matchType,
+        tournament_name: matchType === "tournament" ? (tournamentName.trim() || null) : null,
         status: "in_progress",
         score_state: { pointHistory: [] },
       })
@@ -205,6 +209,29 @@ export default function NewMatchPage() {
               </div>
             )}
           </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-zinc-400">Match type</label>
+            <select
+              value={matchType}
+              onChange={(e) => setMatchType(e.target.value as "recreational" | "tournament")}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50"
+            >
+              <option value="recreational">Recreational</option>
+              <option value="tournament">Tournament</option>
+            </select>
+          </div>
+          {matchType === "tournament" && (
+            <div>
+              <label className="mb-2 block text-sm font-medium text-zinc-400">Tournament name</label>
+              <input
+                type="text"
+                value={tournamentName}
+                onChange={(e) => setTournamentName(e.target.value)}
+                placeholder="e.g. OC Open"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50 placeholder-zinc-500"
+              />
+            </div>
+          )}
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-400">Location (optional)</label>
             {!useNewLocation ? (

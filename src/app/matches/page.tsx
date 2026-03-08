@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 import { deriveScore, type PointSide } from "@/lib/scoreUtils";
-import { getPlayerDisplayName } from "@/lib/playerDisplay";
+import { getPlayerDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
 import { getLocationName } from "@/lib/locationDisplay";
 
 type MatchRow = {
@@ -17,6 +17,8 @@ type MatchRow = {
   verification_status?: string;
   end_reason?: string | null;
   winner_side?: string | null;
+  match_type?: string | null;
+  tournament_name?: string | null;
   challenger_id?: string;
   opponent_id?: string;
   challenger?: unknown;
@@ -68,7 +70,7 @@ export default function MatchesPage() {
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
         supabase
           .from("matches")
-          .select("id, status, created_at, score_state, verification_status, end_reason, winner_side, challenger_id, opponent_id, location_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name), location:locations!location_id(name)")
+          .select("id, status, created_at, score_state, verification_status, end_reason, winner_side, challenger_id, opponent_id, location_id, match_type, tournament_name, challenger:players!challenger_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent:players!opponent_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), location:locations!location_id(name)")
           .order("created_at", { ascending: false }),
       ]).then(([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
@@ -230,7 +232,17 @@ export default function MatchesPage() {
                   className="block rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-zinc-50 active:bg-zinc-800"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{getPlayerDisplayName(m.challenger, m.challenger_id)} vs {getPlayerDisplayName(m.opponent, m.opponent_id)}</span>
+                    <span className="font-medium">
+                      {getPlayerDisplayName(m.challenger, m.challenger_id)}
+                      {getPlayerRepresentationLabel(m.challenger) && (
+                        <span className="ml-1 text-xs font-normal text-zinc-400">({getPlayerRepresentationLabel(m.challenger)})</span>
+                      )}{" "}
+                      vs{" "}
+                      {getPlayerDisplayName(m.opponent, m.opponent_id)}
+                      {getPlayerRepresentationLabel(m.opponent) && (
+                        <span className="ml-1 text-xs font-normal text-zinc-400">({getPlayerRepresentationLabel(m.opponent)})</span>
+                      )}
+                    </span>
                     {m.status !== "completed" && (
                       <span className="rounded bg-emerald-600/90 px-1.5 py-0.5 text-xs font-medium text-white">LIVE</span>
                     )}
@@ -246,9 +258,11 @@ export default function MatchesPage() {
                     {m.status === "completed" && m.verification_status === "verified" && (
                       <span className="ml-1 text-emerald-500">· Verified</span>
                     )}
-                    {locationName && (
-                      <span className="mt-0.5 block text-xs text-zinc-500">{locationName}</span>
-                    )}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    {m.match_type === "tournament"
+                      ? `Tournament${m.tournament_name?.trim() ? ` · ${m.tournament_name.trim()}` : " · Tournament match"}${locationName ? ` · ${locationName}` : ""}`
+                      : `Recreational${locationName ? ` · ${locationName}` : ""}`}
                   </span>
                 </Link>
               </li>
