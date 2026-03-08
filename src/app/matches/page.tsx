@@ -90,6 +90,12 @@ export default function MatchesPage() {
           >
             Profile
           </Link>
+          <Link
+            href="/players"
+            className="rounded-full border border-zinc-600 px-4 py-3 text-sm font-medium text-zinc-300 active:bg-zinc-800"
+          >
+            Players
+          </Link>
         </div>
 
         <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Your matches</h2>

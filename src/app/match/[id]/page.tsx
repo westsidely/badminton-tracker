@@ -33,6 +33,7 @@ type MatchRow = {
   id: string;
   status: string;
   created_at: string;
+  created_by?: string | null;
   score_state: { pointHistory: PointEntry[] };
   winner_side: string | null;
   verification_status?: VerificationStatus;
@@ -60,10 +61,13 @@ export default function MatchPage() {
   const router = useRouter();
   const id = params.id as string;
   const [match, setMatch] = useState<MatchRow | null>(null);
+  const [session, setSession] = useState<{ user: { id: string } } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pendingSide, setPendingSide] = useState<PointSide | null>(null);
   const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
+  const [reopenedJustNow, setReopenedJustNow] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -79,7 +83,7 @@ export default function MatchPage() {
   const fetchMatch = useCallback(async () => {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, status, created_at, score_state, winner_side, verification_status, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
+      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, challenger_id, opponent_id, challenger:players!challenger_id(display_name), opponent:players!opponent_id(display_name)")
       .eq("id", id)
       .single();
     if (error || !data) {
@@ -94,8 +98,23 @@ export default function MatchPage() {
   }, [id]);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => setSession(s ? { user: { id: s.user.id } } : null));
+  }, []);
+  useEffect(() => {
     fetchMatch();
   }, [fetchMatch]);
+
+  const isAdmin = !!session && !!match && match.created_by === session.user.id;
+  const [playerOptions, setPlayerOptions] = useState<{ id: string; display_name: string }[]>([]);
+  const [editChallengerId, setEditChallengerId] = useState("");
+  const [editOpponentId, setEditOpponentId] = useState("");
+
+  useEffect(() => {
+    if (!showEdit || !session) return;
+    supabase.from("players").select("id, display_name").order("display_name").then(({ data }) => {
+      setPlayerOptions((data as { id: string; display_name: string }[]) ?? []);
+    });
+  }, [showEdit, session]);
 
   const addPoint = async (side: PointSide, reason: PointReason) => {
     if (!match || match.status !== "in_progress" || saving) return;
@@ -165,6 +184,29 @@ export default function MatchPage() {
     setMatch((m) => (!m ? m : { ...m, verification_status: "verified" as VerificationStatus }));
   };
 
+  const reopenMatch = async () => {
+    if (!match || match.status !== "completed" || saving) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("matches")
+      .update({ status: "in_progress", winner_side: null })
+      .eq("id", id);
+    setSaving(false);
+    if (error) return;
+    setReopenedJustNow(true);
+    fetchMatch();
+  };
+
+  const saveEdit = async () => {
+    if (!match || !editChallengerId || !editOpponentId || editChallengerId === editOpponentId || saving) return;
+    setSaving(true);
+    const { error } = await supabase.from("matches").update({ challenger_id: editChallengerId, opponent_id: editOpponentId }).eq("id", id);
+    setSaving(false);
+    if (error) return;
+    setShowEdit(false);
+    fetchMatch();
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
@@ -225,6 +267,14 @@ export default function MatchPage() {
           </p>
         )}
 
+        {inProgress && isAdmin && reopenedJustNow && (
+          <p className="mx-4 mt-2 rounded-lg bg-amber-900/40 px-3 py-2 text-center text-sm text-amber-200">
+            Match reopened – continue scoring below.
+          </p>
+        )}
+        {inProgress && isAdmin && (
+          <p className="px-4 py-1 text-center text-xs text-zinc-500">You manage this match</p>
+        )}
         {inProgress && (
           <>
             <div className="flex items-center justify-center gap-2 py-2">
@@ -350,6 +400,29 @@ export default function MatchPage() {
 
         {!inProgress && (
           <div className="space-y-2 p-4">
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  onClick={reopenMatch}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-amber-600 py-2 text-sm font-medium text-amber-400"
+                >
+                  Reopen / Continue match
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditChallengerId(match.challenger_id ?? "");
+                    setEditOpponentId(match.opponent_id ?? "");
+                    setShowEdit(true);
+                  }}
+                  className="w-full rounded-lg border border-zinc-600 py-2 text-sm font-medium text-zinc-300"
+                >
+                  Edit match
+                </button>
+              </>
+            )}
             {(match.verification_status ?? "unverified") === "unverified" && (
               <button
                 type="button"
@@ -363,6 +436,57 @@ export default function MatchPage() {
             <Link href="/matches" className="block rounded-lg bg-zinc-700 py-3 text-center text-sm font-medium text-zinc-50 active:bg-zinc-600">
               Back to matches
             </Link>
+          </div>
+        )}
+
+        {showEdit && isAdmin && (
+          <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Edit match">
+            <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
+              <h2 className="mb-3 text-sm font-semibold text-zinc-50">Edit match</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs text-zinc-400">Challenger</label>
+                  <select
+                    value={editChallengerId}
+                    onChange={(e) => setEditChallengerId(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50"
+                  >
+                    {playerOptions.map((p) => (
+                      <option key={p.id} value={p.id}>{p.display_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-zinc-400">Opponent</label>
+                  <select
+                    value={editOpponentId}
+                    onChange={(e) => setEditOpponentId(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50"
+                  >
+                    {playerOptions.map((p) => (
+                      <option key={p.id} value={p.id}>{p.display_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={saveEdit}
+                    disabled={saving || !editChallengerId || !editOpponentId || editChallengerId === editOpponentId}
+                    className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowEdit(false)}
+                    className="rounded-lg border border-zinc-600 py-2 px-4 text-sm text-zinc-400"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
