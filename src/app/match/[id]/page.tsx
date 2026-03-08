@@ -31,8 +31,8 @@ type MatchRow = {
   score_state: { pointHistory: PointEntry[] };
   winner_side: string | null;
   verification_status?: VerificationStatus;
-  challenger: { display_name: string } | null;
-  opponent: { display_name: string } | null;
+  challenger: { display_name: string }[];
+  opponent: { display_name: string }[];
 };
 
 export default function MatchPage() {
@@ -157,7 +157,7 @@ export default function MatchPage() {
     <div className="flex min-h-screen flex-col bg-zinc-950">
       <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <Link href="/matches" className="text-sm text-zinc-400 underline active:text-zinc-300">← Matches</Link>
-        <span className="text-sm text-zinc-500">{match.challenger?.display_name ?? "?"} vs {match.opponent?.display_name ?? "?"}</span>
+        <span className="text-sm text-zinc-500">{match.challenger?.[0]?.display_name ?? "?"} vs {match.opponent?.[0]?.display_name ?? "?"}</span>
       </header>
 
       <div className="flex flex-1 flex-col">
@@ -176,7 +176,7 @@ export default function MatchPage() {
 
         {derived.matchOver && (
           <p className="text-center text-emerald-400">
-            Match over. {derived.winnerSide === "left" ? (match.challenger?.display_name ?? "Challenger") : (match.opponent?.display_name ?? "Opponent")} won.
+            Match over. {derived.winnerSide === "left" ? (match.challenger?.[0]?.display_name ?? "Challenger") : (match.opponent?.[0]?.display_name ?? "Opponent")} won.
           </p>
         )}
 
@@ -191,7 +191,7 @@ export default function MatchPage() {
         {inProgress && (
           <>
             <p className="px-4 py-2 text-center text-xs text-zinc-500">
-              Tap left ({match.challenger?.display_name ?? "challenger"}) or right ({match.opponent?.display_name ?? "opponent"}) to add a point
+              Tap left ({match.challenger?.[0]?.display_name ?? "challenger"}) or right ({match.opponent?.[0]?.display_name ?? "opponent"}) to add a point
             </p>
             <div className="flex flex-1">
               <button

@@ -13,8 +13,8 @@ type MatchRow = {
   created_at: string;
   score_state: { pointHistory: PointSide[] };
   verification_status?: string;
-  challenger: { display_name: string } | null;
-  opponent: { display_name: string } | null;
+  challenger: { display_name: string }[];
+  opponent: { display_name: string }[];
 };
 
 export default function MatchesPage() {
@@ -110,7 +110,7 @@ export default function MatchesPage() {
                   href={`/match/${m.id}`}
                   className="block rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-zinc-50 active:bg-zinc-800"
                 >
-                  <span className="font-medium">{m.challenger?.display_name ?? "?"} vs {m.opponent?.display_name ?? "?"}</span>
+                  <span className="font-medium">{m.challenger?.[0]?.display_name ?? "?"} vs {m.opponent?.[0]?.display_name ?? "?"}</span>
                   <span className="ml-2 text-sm text-zinc-400">
                     {scoreStr}
                     {m.status === "completed" ? " ✓" : " (live)"}
