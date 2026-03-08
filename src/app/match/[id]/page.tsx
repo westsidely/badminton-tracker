@@ -271,9 +271,9 @@ export default function MatchPage() {
         {match.created_at && (
           <p className="px-4 pt-2 text-center text-xs text-zinc-500">{formatMatchStart(match.created_at)}</p>
         )}
-        {matchLocationName && (
-          <p className="px-4 text-center text-xs text-zinc-500">{matchLocationName}</p>
-        )}
+        <p className="px-4 text-center text-xs text-zinc-500">
+          {matchLocationName ?? "No venue indicated"}
+        </p>
         <div className="flex items-center justify-center gap-4 py-3 text-center">
           {derived.games.map((g, i) => (
             <span key={i} className="text-lg font-medium text-zinc-300">
