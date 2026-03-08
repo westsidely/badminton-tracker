@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -28,6 +28,14 @@ type MatchRow = {
 type PlayerOption = { id: string; display_name: string };
 
 export default function StatsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-zinc-950"><p className="text-zinc-400">Loading…</p></div>}>
+      <StatsContent />
+    </Suspense>
+  );
+}
+
+function StatsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const playerFromUrl = searchParams.get("player");
