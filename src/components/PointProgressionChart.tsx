@@ -61,16 +61,16 @@ export function PointProgressionChart({ data }: { data: Point[] }) {
     <div className="mx-4 my-2 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900/50 p-2">
       <svg viewBox={`0 0 ${w} ${h}`} className="h-28 w-full max-w-[280px]" preserveAspectRatio="xMidYMid meet">
         <line x1={pad.l} y1={pad.t + plotH} x2={pad.l + plotW} y2={pad.t + plotH} stroke="currentColor" strokeWidth="0.5" className="text-zinc-600" />
-        <polyline points={leftPoints} fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <polyline points={rightPoints} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <text x={pad.l - 4} y={pad.t + 4} className="fill-[#3b82f6] text-[8px] font-medium">A</text>
-        <text x={pad.l - 4} y={pad.t + 12} className="fill-[#ef4444] text-[8px] font-medium">B</text>
+        <polyline points={leftPoints} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={rightPoints} fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <text x={pad.l - 4} y={pad.t + 4} className="fill-[#3b82f6] text-[9px] font-semibold">A</text>
+        <text x={pad.l - 4} y={pad.t + 14} className="fill-[#ef4444] text-[9px] font-semibold">B</text>
         {labels.map((l, i) => (
           <text
             key={i}
             x={l.x}
             y={l.y}
-            className="fill-zinc-400 text-[7px]"
+            className="fill-zinc-50 text-[9px] drop-shadow-[0_0_2px_rgba(0,0,0,0.8)]"
           >
             {l.text}
           </text>
