@@ -105,7 +105,14 @@ export default function MatchesPage() {
         const opponent = getPlayerDisplayName(m.opponent, m.opponent_id).toLowerCase();
         const dateStr = formatMatchDate(m.created_at).toLowerCase();
         const locationName = (getLocationName(m.location) ?? "").toLowerCase();
-        return challenger.includes(q) || opponent.includes(q) || dateStr.includes(q) || locationName.includes(q);
+        const tournament = (m.tournament_name ?? "").toLowerCase();
+        return (
+          challenger.includes(q) ||
+          opponent.includes(q) ||
+          dateStr.includes(q) ||
+          locationName.includes(q) ||
+          tournament.includes(q)
+        );
       });
     }
     if (sortOrder === "oldest") list.reverse();
@@ -172,7 +179,7 @@ export default function MatchesPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by player, date, location"
+            placeholder="Search by player, date, location, tournament"
             className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-50 placeholder-zinc-500"
           />
           <div className="flex flex-wrap gap-2">

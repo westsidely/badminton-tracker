@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -20,6 +20,7 @@ export default function LeaderboardPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"win_pct" | "wins">("win_pct");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,6 +39,28 @@ export default function LeaderboardPage() {
     });
   }, [router]);
 
+  const sortedByWinPct = useMemo(
+    () =>
+      [...rows].sort(
+        (a, b) =>
+          (b.win_pct ?? 0) - (a.win_pct ?? 0) ||
+          b.verified_matches - a.verified_matches
+      ),
+    [rows]
+  );
+
+  const sortedByWins = useMemo(
+    () =>
+      [...rows].sort(
+        (a, b) =>
+          b.wins - a.wins ||
+          b.verified_matches - a.verified_matches
+      ),
+    [rows]
+  );
+
+  const activeRows = tab === "win_pct" ? sortedByWinPct : sortedByWins;
+
   if (loading || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
@@ -49,23 +72,45 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-6 pb-8">
       <div className="mx-auto max-w-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-zinc-50">Leaderboard</h1>
           <Link href="/matches" className="text-sm text-zinc-400 underline active:text-zinc-300">
             ← Matches
           </Link>
         </div>
-        <p className="mb-6 text-sm text-zinc-500">
-          Top 10 by win % (verified matches). Ranked by win %, then verified count.
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTab("win_pct")}
+            className={`flex-1 rounded-full px-3 py-1.5 text-xs font-medium ${
+              tab === "win_pct" ? "bg-zinc-100 text-zinc-900" : "border border-zinc-600 text-zinc-300"
+            }`}
+          >
+            Best win %
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("wins")}
+            className={`flex-1 rounded-full px-3 py-1.5 text-xs font-medium ${
+              tab === "wins" ? "bg-zinc-100 text-zinc-900" : "border border-zinc-600 text-zinc-300"
+            }`}
+          >
+            Most victories
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-zinc-500">
+          {tab === "win_pct"
+            ? "Ranked by win % (verified matches), then verified count."
+            : "Ranked by total wins (verified matches), then verified count."}
         </p>
 
-        {rows.length === 0 ? (
+        {activeRows.length === 0 ? (
           <p className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-6 text-center text-sm text-zinc-500">
             No verified matches yet. Complete and verify matches to appear here.
           </p>
         ) : (
           <ul className="space-y-2">
-            {rows.map((r, i) => (
+            {activeRows.slice(0, 10).map((r, i) => (
               <li
                 key={r.player_id}
                 className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-3"
