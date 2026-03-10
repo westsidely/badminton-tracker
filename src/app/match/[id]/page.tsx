@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { deriveScore, POINT_REASONS, buildCurrentGameProgression, prefixCompletedGames, validateGameScore, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
+import { deriveScore, POINT_REASONS, buildCurrentGameProgression, normalizeEntry, prefixCompletedGames, validateGameScore, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
 import { getPlayerDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
 import { getLocationName } from "@/lib/locationDisplay";
 import { PointProgressionChart } from "@/components/PointProgressionChart";
@@ -23,11 +23,7 @@ function getReasonLabel(reason: PointReason, otherName: string): string {
 
 function normalizeHistory(raw: unknown): PointEntry[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((entry) =>
-    typeof entry === "string"
-      ? { side: entry as PointSide, reason: "winner" as PointReason }
-      : { side: entry.side, reason: entry.reason ?? "winner" }
-  );
+  return raw.map((entry) => normalizeEntry(entry));
 }
 
 export type VerificationStatus = "unverified" | "pending" | "verified";
@@ -180,6 +176,8 @@ export default function MatchPage() {
   const [editScoreLeft, setEditScoreLeft] = useState("");
   const [editScoreRight, setEditScoreRight] = useState("");
   const [editScoreError, setEditScoreError] = useState<string | null>(null);
+  const [showZonePicker, setShowZonePicker] = useState(false);
+  const [pendingReason, setPendingReason] = useState<PointReason | null>(null);
   const [reopenedJustNow, setReopenedJustNow] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
@@ -243,10 +241,13 @@ export default function MatchPage() {
     });
   }, [showEdit, session]);
 
-  const addPoint = async (side: PointSide, reason: PointReason) => {
+  const addPoint = async (side: PointSide, reason: PointReason, zone?: string | null) => {
     if (!match || match.status !== "in_progress" || saving) return;
     setPendingSide(null);
-    const history = [...(match.score_state?.pointHistory ?? []), { side, reason }];
+    const history = [
+      ...(match.score_state?.pointHistory ?? []),
+      { side, reason, zone: zone ?? null },
+    ];
     const derived = deriveScore(history);
     setSaving(true);
     const update: { score_state: { pointHistory: PointEntry[] }; status?: string; winner_side?: string | null } = {
@@ -282,8 +283,8 @@ export default function MatchPage() {
     const prefixRaw = prefixCompletedGames(fullHistory);
     const prefix = prefixRaw as PointEntry[];
     const synthetic: PointEntry[] = [
-      ...Array(left).fill({ side: "left" as PointSide, reason: "winner" as PointReason }),
-      ...Array(right).fill({ side: "right" as PointSide, reason: "winner" as PointReason }),
+      ...Array(left).fill({ side: "left" as PointSide, reason: "winner" as PointReason, zone: null }),
+      ...Array(right).fill({ side: "right" as PointSide, reason: "winner" as PointReason, zone: null }),
     ];
     const history = [...prefix, ...synthetic];
     const newDerived = deriveScore(history);
@@ -451,6 +452,15 @@ export default function MatchPage() {
         </div>
 
         <PointProgressionChart data={buildCurrentGameProgression(history)} />
+        {(() => {
+          const lastWithZone = [...history].reverse().find((p) => (p as PointEntry).zone);
+          const zone = (lastWithZone as PointEntry | undefined)?.zone;
+          return zone ? (
+            <p className="px-4 text-center text-[10px] text-zinc-500">
+              Last recorded action zone: {zone}
+            </p>
+          ) : null;
+        })()}
 
         {(derived.matchOver || (!inProgress && match.winner_side)) && (
           <p className="text-center text-emerald-400">
@@ -521,7 +531,7 @@ export default function MatchPage() {
               {recordPointTypes ? "Tap a name to award a point, then choose reason" : "Tap a name to award a point"}
             </p>
 
-            {pendingSide !== null && (
+            {pendingSide !== null && !showZonePicker && (
               <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Point reason">
                 <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
                   <p className="mb-3 text-center text-sm font-medium text-zinc-50">
@@ -532,7 +542,14 @@ export default function MatchPage() {
                       <button
                         key={reason}
                         type="button"
-                        onClick={() => addPoint(pendingSide, reason)}
+                        onClick={() => {
+                          if (!recordPointTypes) {
+                            addPoint(pendingSide, reason);
+                          } else {
+                            setPendingReason(reason);
+                            setShowZonePicker(true);
+                          }
+                        }}
                         className="rounded-xl bg-zinc-800 py-3 text-left text-sm text-zinc-50 touch-manipulation active:bg-zinc-700"
                       >
                         {getReasonLabel(reason, pendingSide === "left" ? opponentName : challengerName)}
@@ -612,6 +629,86 @@ export default function MatchPage() {
                     <button type="button" onClick={() => { setShowEditScore(false); setEditScoreError(null); }} className="rounded-lg border border-zinc-600 py-2 px-4 text-sm text-zinc-400">
                       Cancel
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {showZonePicker && pendingSide !== null && pendingReason && (
+              <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Select court zone">
+                <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
+                  <h2 className="mb-2 text-sm font-semibold text-zinc-50">Where did the last shot land?</h2>
+                  <p className="mb-3 text-xs text-zinc-400">
+                    Tap the zone where the winner landed or the mistake occurred. Optional – you can skip this.
+                  </p>
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium text-zinc-400 text-center">Team A ({challengerName})</p>
+                    <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-800 p-0.5">
+                      {Array.from({ length: 5 }).map((_, r) => (
+                        <div key={r} className="grid grid-cols-5 gap-0.5">
+                          {Array.from({ length: 5 }).map((__, c) => {
+                            const zone = `A-${r + 1}-${c + 1}`;
+                            return (
+                              <button
+                                key={zone}
+                                type="button"
+                                onClick={() => {
+                                  addPoint(pendingSide, pendingReason, zone);
+                                  setShowZonePicker(false);
+                                  setPendingReason(null);
+                                }}
+                                className="h-6 rounded bg-zinc-900/70 active:bg-zinc-700"
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-zinc-400 text-center">Team B ({opponentName})</p>
+                    <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-800 p-0.5">
+                      {Array.from({ length: 5 }).map((_, r) => (
+                        <div key={r} className="grid grid-cols-5 gap-0.5">
+                          {Array.from({ length: 5 }).map((__, c) => {
+                            const zone = `B-${r + 1}-${c + 1}`;
+                            return (
+                              <button
+                                key={zone}
+                                type="button"
+                                onClick={() => {
+                                  addPoint(pendingSide, pendingReason, zone);
+                                  setShowZonePicker(false);
+                                  setPendingReason(null);
+                                }}
+                                className="h-6 rounded bg-zinc-900/70 active:bg-zinc-700"
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          addPoint(pendingSide, pendingReason, null);
+                          setShowZonePicker(false);
+                          setPendingReason(null);
+                        }}
+                        className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white"
+                      >
+                        Skip zone
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowZonePicker(false);
+                          setPendingReason(null);
+                          setPendingSide(null);
+                        }}
+                        className="rounded-lg border border-zinc-600 py-2 px-4 text-sm text-zinc-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

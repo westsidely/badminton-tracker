@@ -16,6 +16,7 @@ export type PointReason = (typeof POINT_REASONS)[number];
 export interface PointEntry {
   side: PointSide;
   reason: PointReason;
+  zone?: string | null;
 }
 
 export function toSide(entry: PointEntry | PointSide): PointSide {
@@ -24,8 +25,12 @@ export function toSide(entry: PointEntry | PointSide): PointSide {
 
 export function normalizeEntry(entry: unknown): PointEntry {
   if (typeof entry === "string") return { side: entry as PointSide, reason: "winner" };
-  const e = entry as { side?: string; reason?: string };
-  return { side: (e.side ?? "left") as PointSide, reason: (e.reason ?? "winner") as PointReason };
+  const e = entry as { side?: string; reason?: string; zone?: string | null };
+  return {
+    side: (e.side ?? "left") as PointSide,
+    reason: (e.reason ?? "winner") as PointReason,
+    zone: e.zone ?? null,
+  };
 }
 
 export interface GameScore {
