@@ -176,8 +176,8 @@ export default function MatchPage() {
   const [editScoreLeft, setEditScoreLeft] = useState("");
   const [editScoreRight, setEditScoreRight] = useState("");
   const [editScoreError, setEditScoreError] = useState<string | null>(null);
-  const [showZonePicker, setShowZonePicker] = useState(false);
-  const [pendingReason, setPendingReason] = useState<PointReason | null>(null);
+  const [pendingZone, setPendingZone] = useState<string | null>(null);
+  const [showReasonModal, setShowReasonModal] = useState(false);
   const [reopenedJustNow, setReopenedJustNow] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
@@ -405,6 +405,44 @@ export default function MatchPage() {
   const opponentName = getPlayerDisplayName(match.opponent, match.opponent_id);
   const matchLocationName = getLocationName(match.location);
 
+  const reasonStats = {
+    left: { winner: 0, unforced: 0, forced: 0, service: 0, lucky: 0 },
+    right: { winner: 0, unforced: 0, forced: 0, service: 0, lucky: 0 },
+  };
+  const zoneStats: Record<string, { wins: number; losses: number }> = {};
+  for (const e of history as PointEntry[]) {
+    const sideKey = e.side === "left" ? "left" : "right";
+    switch (e.reason) {
+      case "winner":
+        reasonStats[sideKey].winner++;
+        break;
+      case "opponent_unforced_error":
+        reasonStats[sideKey].unforced++;
+        break;
+      case "forced_error":
+        reasonStats[sideKey].forced++;
+        break;
+      case "service_error":
+        reasonStats[sideKey].service++;
+        break;
+      case "lucky":
+        reasonStats[sideKey].lucky++;
+        break;
+    }
+    if (e.zone) {
+      const [team] = e.zone.split("-");
+      const key = e.zone;
+      if (!zoneStats[key]) zoneStats[key] = { wins: 0, losses: 0 };
+      if (team === "A") {
+        if (e.side === "left") zoneStats[key].wins++;
+        else zoneStats[key].losses++;
+      } else if (team === "B") {
+        if (e.side === "right") zoneStats[key].wins++;
+        else zoneStats[key].losses++;
+      }
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950">
       <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
@@ -462,6 +500,101 @@ export default function MatchPage() {
           ) : null;
         })()}
 
+        <section className="mx-4 mt-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+          <h2 className="mb-2 text-xs font-medium text-zinc-400 text-center">Current match breakdown</h2>
+          <div className="grid grid-cols-3 gap-1 text-[11px]">
+            <div />
+            <div className="text-center text-zinc-400">Team A</div>
+            <div className="text-center text-zinc-400">Team B</div>
+
+            <div className="text-zinc-500">Winners</div>
+            <div className="text-center text-zinc-50">{reasonStats.left.winner}</div>
+            <div className="text-center text-zinc-50">{reasonStats.right.winner}</div>
+
+            <div className="text-zinc-500">Unforced errors</div>
+            <div className="text-center text-zinc-50">{reasonStats.left.unforced}</div>
+            <div className="text-center text-zinc-50">{reasonStats.right.unforced}</div>
+
+            <div className="text-zinc-500">Forced errors</div>
+            <div className="text-center text-zinc-50">{reasonStats.left.forced}</div>
+            <div className="text-center text-zinc-50">{reasonStats.right.forced}</div>
+
+            <div className="text-zinc-500">Service errors</div>
+            <div className="text-center text-zinc-50">{reasonStats.left.service}</div>
+            <div className="text-center text-zinc-50">{reasonStats.right.service}</div>
+
+            <div className="text-zinc-500">Lucky shots</div>
+            <div className="text-center text-zinc-50">{reasonStats.left.lucky}</div>
+            <div className="text-center text-zinc-50">{reasonStats.right.lucky}</div>
+          </div>
+        </section>
+
+        <section className="mx-4 mt-3 space-y-2">
+          <p className="text-xs font-medium text-zinc-400 text-center">
+            Zone analysis – Team A ({challengerName})
+          </p>
+          <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-800 bg-zinc-900/60 p-0.5">
+            {Array.from({ length: 5 }).map((_, r) => (
+              <div key={r} className="grid grid-cols-5 gap-0.5">
+                {Array.from({ length: 5 }).map((__, c) => {
+                  const key = `A-${r + 1}-${c + 1}`;
+                  const counts = zoneStats[key];
+                  const hasData = counts && (counts.wins > 0 || counts.losses > 0);
+                  return (
+                    <div
+                      key={key}
+                      className="flex h-7 flex-col items-center justify-center rounded bg-zinc-900/80 text-[9px]"
+                    >
+                      {hasData && (
+                        <>
+                          {counts.wins > 0 && (
+                            <span className="text-emerald-400">+{counts.wins}</span>
+                          )}
+                          {counts.losses > 0 && (
+                            <span className="text-red-400">-{counts.losses}</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-2 text-xs font-medium text-zinc-400 text-center">
+            Zone analysis – Team B ({opponentName})
+          </p>
+          <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-800 bg-zinc-900/60 p-0.5">
+            {Array.from({ length: 5 }).map((_, r) => (
+              <div key={r} className="grid grid-cols-5 gap-0.5">
+                {Array.from({ length: 5 }).map((__, c) => {
+                  const key = `B-${r + 1}-${c + 1}`;
+                  const counts = zoneStats[key];
+                  const hasData = counts && (counts.wins > 0 || counts.losses > 0);
+                  return (
+                    <div
+                      key={key}
+                      className="flex h-7 flex-col items-center justify-center rounded bg-zinc-900/80 text-[9px]"
+                    >
+                      {hasData && (
+                        <>
+                          {counts.wins > 0 && (
+                            <span className="text-emerald-400">+{counts.wins}</span>
+                          )}
+                          {counts.losses > 0 && (
+                            <span className="text-red-400">-{counts.losses}</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </section>
+
         {(derived.matchOver || (!inProgress && match.winner_side)) && (
           <p className="text-center text-emerald-400">
             Match over. {(match.winner_side ?? derived.winnerSide) === "left" ? challengerName : opponentName} won.
@@ -509,29 +642,89 @@ export default function MatchPage() {
                 onClick={togglePointTypes}
                 className={`rounded px-2 py-1 text-xs font-medium ${recordPointTypes ? "bg-zinc-600 text-zinc-50" : "text-zinc-500"}`}
               >
-                {recordPointTypes ? "Point types ON" : "Point types OFF"}
+                {recordPointTypes ? "Zone / types ON" : "Simple scoring"}
               </button>
             </div>
-            <CourtButtons
-              layoutMode={layoutMode}
-              challengerName={challengerName}
-              opponentName={opponentName}
-              derived={derived}
-              saving={saving}
-              onTapLeft={() => {
-                if (recordPointTypes) setPendingSide("left");
-                else addPoint("left", "winner");
-              }}
-              onTapRight={() => {
-                if (recordPointTypes) setPendingSide("right");
-                else addPoint("right", "winner");
-              }}
-            />
-            <p className="px-4 py-1 text-center text-xs text-zinc-500">
-              {recordPointTypes ? "Tap a name to award a point, then choose reason" : "Tap a name to award a point"}
-            </p>
+            {recordPointTypes ? (
+              <>
+                <div className="px-4 pb-2 text-center text-xs text-zinc-500">
+                  Tap a zone to award a point, then choose reason.
+                </div>
+                <div className="mx-4 space-y-3">
+                  <p className="text-center text-xs font-medium text-zinc-400">
+                    Team A ({challengerName})
+                  </p>
+                  <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-900/60 p-0.5">
+                    {Array.from({ length: 5 }).map((_, r) => (
+                      <div key={r} className="grid grid-cols-5 gap-0.5">
+                        {Array.from({ length: 5 }).map((__, c) => {
+                          const zone = `A-${r + 1}-${c + 1}`;
+                          return (
+                            <button
+                              key={zone}
+                              type="button"
+                              onClick={() => {
+                                if (derived.matchOver || saving) return;
+                                setPendingSide("left");
+                                setPendingZone(zone);
+                                setShowReasonModal(true);
+                              }}
+                              className="h-7 rounded bg-zinc-800/80 active:bg-zinc-700"
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-center text-xs font-medium text-zinc-400">
+                    Team B ({opponentName})
+                  </p>
+                  <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-900/60 p-0.5">
+                    {Array.from({ length: 5 }).map((_, r) => (
+                      <div key={r} className="grid grid-cols-5 gap-0.5">
+                        {Array.from({ length: 5 }).map((__, c) => {
+                          const zone = `B-${r + 1}-${c + 1}`;
+                          return (
+                            <button
+                              key={zone}
+                              type="button"
+                              onClick={() => {
+                                if (derived.matchOver || saving) return;
+                                setPendingSide("right");
+                                setPendingZone(zone);
+                                setShowReasonModal(true);
+                              }}
+                              className="h-7 rounded bg-zinc-800/80 active:bg-zinc-700"
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <CourtButtons
+                  layoutMode={layoutMode}
+                  challengerName={challengerName}
+                  opponentName={opponentName}
+                  derived={derived}
+                  saving={saving}
+                  onTapLeft={() => {
+                    addPoint("left", "winner");
+                  }}
+                  onTapRight={() => {
+                    addPoint("right", "winner");
+                  }}
+                />
+                <p className="px-4 py-1 text-center text-xs text-zinc-500">
+                  Tap a name to award a point
+                </p>
+              </>
+            )}
 
-            {pendingSide !== null && !showZonePicker && (
+            {showReasonModal && pendingSide !== null && (
               <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Point reason">
                 <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
                   <p className="mb-3 text-center text-sm font-medium text-zinc-50">
@@ -543,12 +736,10 @@ export default function MatchPage() {
                         key={reason}
                         type="button"
                         onClick={() => {
-                          if (!recordPointTypes) {
-                            addPoint(pendingSide, reason);
-                          } else {
-                            setPendingReason(reason);
-                            setShowZonePicker(true);
-                          }
+                          addPoint(pendingSide, reason, pendingZone);
+                          setShowReasonModal(false);
+                          setPendingSide(null);
+                          setPendingZone(null);
                         }}
                         className="rounded-xl bg-zinc-800 py-3 text-left text-sm text-zinc-50 touch-manipulation active:bg-zinc-700"
                       >
@@ -557,7 +748,11 @@ export default function MatchPage() {
                     ))}
                     <button
                       type="button"
-                      onClick={() => setPendingSide(null)}
+                      onClick={() => {
+                        setShowReasonModal(false);
+                        setPendingSide(null);
+                        setPendingZone(null);
+                      }}
                       className="rounded-xl border border-zinc-600 py-2.5 text-sm text-zinc-400 touch-manipulation"
                     >
                       Cancel
@@ -629,86 +824,6 @@ export default function MatchPage() {
                     <button type="button" onClick={() => { setShowEditScore(false); setEditScoreError(null); }} className="rounded-lg border border-zinc-600 py-2 px-4 text-sm text-zinc-400">
                       Cancel
                     </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            {showZonePicker && pendingSide !== null && pendingReason && (
-              <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Select court zone">
-                <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
-                  <h2 className="mb-2 text-sm font-semibold text-zinc-50">Where did the last shot land?</h2>
-                  <p className="mb-3 text-xs text-zinc-400">
-                    Tap the zone where the winner landed or the mistake occurred. Optional – you can skip this.
-                  </p>
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-zinc-400 text-center">Team A ({challengerName})</p>
-                    <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-800 p-0.5">
-                      {Array.from({ length: 5 }).map((_, r) => (
-                        <div key={r} className="grid grid-cols-5 gap-0.5">
-                          {Array.from({ length: 5 }).map((__, c) => {
-                            const zone = `A-${r + 1}-${c + 1}`;
-                            return (
-                              <button
-                                key={zone}
-                                type="button"
-                                onClick={() => {
-                                  addPoint(pendingSide, pendingReason, zone);
-                                  setShowZonePicker(false);
-                                  setPendingReason(null);
-                                }}
-                                className="h-6 rounded bg-zinc-900/70 active:bg-zinc-700"
-                              />
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-xs font-medium text-zinc-400 text-center">Team B ({opponentName})</p>
-                    <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-800 p-0.5">
-                      {Array.from({ length: 5 }).map((_, r) => (
-                        <div key={r} className="grid grid-cols-5 gap-0.5">
-                          {Array.from({ length: 5 }).map((__, c) => {
-                            const zone = `B-${r + 1}-${c + 1}`;
-                            return (
-                              <button
-                                key={zone}
-                                type="button"
-                                onClick={() => {
-                                  addPoint(pendingSide, pendingReason, zone);
-                                  setShowZonePicker(false);
-                                  setPendingReason(null);
-                                }}
-                                className="h-6 rounded bg-zinc-900/70 active:bg-zinc-700"
-                              />
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          addPoint(pendingSide, pendingReason, null);
-                          setShowZonePicker(false);
-                          setPendingReason(null);
-                        }}
-                        className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white"
-                      >
-                        Skip zone
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowZonePicker(false);
-                          setPendingReason(null);
-                          setPendingSide(null);
-                        }}
-                        className="rounded-lg border border-zinc-600 py-2 px-4 text-sm text-zinc-400"
-                      >
-                        Cancel
-                      </button>
-                    </div>
                   </div>
                 </div>
               </div>
