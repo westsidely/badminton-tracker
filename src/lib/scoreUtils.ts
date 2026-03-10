@@ -92,3 +92,37 @@ export function deriveScore(pointHistory: (PointEntry | PointSide)[] | unknown):
     winnerSide: null,
   };
 }
+
+/** Validate a single game score (21 win by 2, cap 30). Returns error message or null if valid. */
+export function validateGameScore(left: number, right: number): string | null {
+  if (!Number.isInteger(left) || !Number.isInteger(right) || left < 0 || right < 0) return "Scores must be whole numbers ≥ 0";
+  if (left > GAME_CAP || right > GAME_CAP) return `Scores cannot exceed ${GAME_CAP}`;
+  const won = gameWon(left, right);
+  if (won) return null; // game over, valid
+  if (left >= GAME_TARGET || right >= GAME_TARGET) return "Game must be won by 2 or reach 30";
+  return null;
+}
+
+/** Build step chart data for current game: [{ pointIndex, left, right }]. */
+export function buildCurrentGameProgression(
+  pointHistory: (PointEntry | PointSide)[] | unknown
+): { pointIndex: number; left: number; right: number }[] {
+  const list = ensurePointHistoryArray(pointHistory);
+  let out: { pointIndex: number; left: number; right: number }[] = [{ pointIndex: 0, left: 0, right: 0 }];
+  let left = 0;
+  let right = 0;
+  for (let i = 0; i < list.length; i++) {
+    const side = toSide(list[i]);
+    if (side === "left") left++;
+    else right++;
+    const won = gameWon(left, right);
+    if (won) {
+      left = 0;
+      right = 0;
+      out = [{ pointIndex: 0, left: 0, right: 0 }];
+      continue;
+    }
+    out.push({ pointIndex: out.length, left, right });
+  }
+  return out;
+}
