@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { deriveScore, POINT_REASONS, buildCurrentGameProgression, validateGameScore, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
+import { deriveScore, POINT_REASONS, buildCurrentGameProgression, prefixCompletedGames, validateGameScore, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
 import { getPlayerDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
 import { getLocationName } from "@/lib/locationDisplay";
 import { PointProgressionChart } from "@/components/PointProgressionChart";
@@ -278,17 +278,12 @@ export default function MatchPage() {
     setShowEditScore(false);
     setEditScoreLeft("");
     setEditScoreRight("");
-    const derived = deriveScore(match.score_state?.pointHistory ?? []);
-    const curLeft = derived.currentGame.left;
-    const curRight = derived.currentGame.right;
-    const prefixLen =
-      (match.score_state?.pointHistory ?? []).length - curLeft - curRight;
-    const prefix = (match.score_state?.pointHistory ?? []).slice(0, Math.max(0, prefixLen));
-    const extraLeft = Math.max(0, left - curLeft);
-    const extraRight = Math.max(0, right - curRight);
+    const fullHistory = match.score_state?.pointHistory ?? [];
+    const prefixRaw = prefixCompletedGames(fullHistory);
+    const prefix = prefixRaw as PointEntry[];
     const synthetic: PointEntry[] = [
-      ...Array(extraLeft).fill({ side: "left" as PointSide, reason: "winner" as PointReason }),
-      ...Array(extraRight).fill({ side: "right" as PointSide, reason: "winner" as PointReason }),
+      ...Array(left).fill({ side: "left" as PointSide, reason: "winner" as PointReason }),
+      ...Array(right).fill({ side: "right" as PointSide, reason: "winner" as PointReason }),
     ];
     const history = [...prefix, ...synthetic];
     const newDerived = deriveScore(history);

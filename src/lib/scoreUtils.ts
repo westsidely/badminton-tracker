@@ -103,6 +103,28 @@ export function validateGameScore(left: number, right: number): string | null {
   return null;
 }
 
+/** Return the prefix of pointHistory that covers only completed games (no partial current game). */
+export function prefixCompletedGames(
+  pointHistory: (PointEntry | PointSide)[] | unknown
+): (PointEntry | PointSide)[] {
+  const list = ensurePointHistoryArray(pointHistory);
+  let left = 0;
+  let right = 0;
+  let cutIndex = 0;
+  for (let i = 0; i < list.length; i++) {
+    const side = toSide(list[i]);
+    if (side === "left") left++;
+    else right++;
+    const won = gameWon(left, right);
+    if (won) {
+      cutIndex = i + 1;
+      left = 0;
+      right = 0;
+    }
+  }
+  return list.slice(0, cutIndex);
+}
+
 /** Build step chart data for current game: [{ pointIndex, left, right }]. */
 export function buildCurrentGameProgression(
   pointHistory: (PointEntry | PointSide)[] | unknown

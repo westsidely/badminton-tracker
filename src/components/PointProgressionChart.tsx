@@ -18,6 +18,20 @@ export function PointProgressionChart({ data }: { data: Point[] }) {
   const leftPoints = data.map((p, i) => `${x(i)},${yLeft(p.left)}`).join(" ");
   const rightPoints = data.map((p, i) => `${x(i)},${yRight(p.right)}`).join(" ");
 
+  const labels: { x: number; y: number; text: string }[] = [];
+  let prevDiff: number | null = null;
+  data.forEach((p, i) => {
+    const diff = p.left - p.right;
+    const shouldLabel =
+      i === 0 ||
+      (prevDiff !== null && Math.sign(diff) !== Math.sign(prevDiff)) ||
+      (prevDiff !== null && Math.abs(diff) > Math.abs(prevDiff));
+    if (shouldLabel) {
+      labels.push({ x: x(i), y: yLeft(p.left) - 4, text: `${p.left}-${p.right}` });
+      prevDiff = diff;
+    }
+  });
+
   return (
     <div className="mx-4 my-2 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900/50 p-2">
       <svg viewBox={`0 0 ${w} ${h}`} className="h-28 w-full max-w-[280px]" preserveAspectRatio="xMidYMid meet">
@@ -26,6 +40,16 @@ export function PointProgressionChart({ data }: { data: Point[] }) {
         <polyline points={rightPoints} fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         <text x={pad.l - 4} y={pad.t + 4} className="fill-[#3b82f6] text-[8px] font-medium">A</text>
         <text x={pad.l - 4} y={pad.t + 12} className="fill-[#ef4444] text-[8px] font-medium">B</text>
+        {labels.map((l, i) => (
+          <text
+            key={i}
+            x={l.x}
+            y={l.y}
+            className="fill-zinc-400 text-[7px]"
+          >
+            {l.text}
+          </text>
+        ))}
       </svg>
     </div>
   );
