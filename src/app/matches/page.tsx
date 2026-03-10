@@ -143,12 +143,6 @@ export default function MatchesPage() {
             New match
           </Link>
           <Link
-            href="/stats"
-            className="rounded-full border border-zinc-600 px-4 py-3 text-sm font-medium text-zinc-300 active:bg-zinc-800"
-          >
-            Stats
-          </Link>
-          <Link
             href="/leaderboard"
             className="rounded-full border border-zinc-600 px-4 py-3 text-sm font-medium text-zinc-300 active:bg-zinc-800"
           >
@@ -164,7 +158,7 @@ export default function MatchesPage() {
             href="/players"
             className="rounded-full border border-zinc-600 px-4 py-3 text-sm font-medium text-zinc-300 active:bg-zinc-800"
           >
-            Players
+            Players / Teams
           </Link>
         </div>
 
