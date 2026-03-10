@@ -430,17 +430,24 @@ export default function MatchPage() {
             ? `Tournament${match.tournament_name?.trim() ? ` · ${match.tournament_name.trim()}` : " · Tournament match"} · ${matchLocationName ?? "No venue indicated"}`
             : `Recreational · ${matchLocationName ?? "No venue indicated"}`}
         </p>
-        <div className="flex items-center justify-center gap-4 py-3 text-center">
-          {derived.games.map((g, i) => (
-            <span key={i} className="text-lg font-medium text-zinc-300">
-              {g.left}-{g.right}
-            </span>
-          ))}
-          {derived.games.length < 3 && (
-            <span className="text-2xl font-semibold text-zinc-50">
+        <div className="flex flex-col items-center justify-center gap-1 py-3 text-center">
+          <div className="flex flex-wrap items-baseline justify-center gap-2">
+            {derived.games.map((g, i) => (
+              <span key={i} className="text-sm font-medium text-zinc-400">
+                {g.left}-{g.right}
+              </span>
+            ))}
+            {derived.games.length > 0 && (
+              <span className="text-xs text-zinc-500">(games)</span>
+            )}
+          </div>
+          <div className="flex items-baseline justify-center gap-3">
+            <span className="text-xs text-zinc-500">{challengerName}</span>
+            <span className="text-3xl font-semibold text-zinc-50 md:text-4xl">
               {derived.currentGame.left} – {derived.currentGame.right}
             </span>
-          )}
+            <span className="text-xs text-zinc-500">{opponentName}</span>
+          </div>
         </div>
 
         <PointProgressionChart data={buildCurrentGameProgression(history)} />

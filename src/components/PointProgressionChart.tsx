@@ -18,18 +18,43 @@ export function PointProgressionChart({ data }: { data: Point[] }) {
   const leftPoints = data.map((p, i) => `${x(i)},${yLeft(p.left)}`).join(" ");
   const rightPoints = data.map((p, i) => `${x(i)},${yRight(p.right)}`).join(" ");
 
-  const labels: { x: number; y: number; text: string }[] = [];
-  let prevDiff: number | null = null;
-  data.forEach((p, i) => {
-    const diff = p.left - p.right;
-    const shouldLabel =
-      i === 0 ||
-      (prevDiff !== null && Math.sign(diff) !== Math.sign(prevDiff)) ||
-      (prevDiff !== null && Math.abs(diff) > Math.abs(prevDiff));
-    if (shouldLabel) {
-      labels.push({ x: x(i), y: yLeft(p.left) - 4, text: `${p.left}-${p.right}` });
-      prevDiff = diff;
+  type Lead = "A" | "B" | "T";
+  const leads: Lead[] = data.map((p) =>
+    p.left > p.right ? "A" : p.right > p.left ? "B" : "T"
+  );
+  const scorers: ("A" | "B" | "N")[] = data.map((p, i) => {
+    if (i === 0) return "N";
+    const prev = data[i - 1];
+    if (p.left > prev.left) return "A";
+    if (p.right > prev.right) return "B";
+    return "N";
+  });
+
+  // Determine run boundaries: a run is a maximal sequence with same (lead, scorer).
+  const runEndIndices: number[] = [];
+  let currentKey = `${leads[0]}-${scorers[0]}`;
+  for (let i = 1; i < data.length; i++) {
+    const key = `${leads[i]}-${scorers[i]}`;
+    if (key !== currentKey) {
+      runEndIndices.push(i - 1);
+      currentKey = key;
     }
+  }
+  runEndIndices.push(data.length - 1);
+
+  const labels: { x: number; y: number; text: string }[] = [];
+  const usedXs: number[] = [];
+  const minDx = 14; // px, to avoid overlap
+
+  runEndIndices.forEach((idx) => {
+    const p = data[idx];
+    const lead = leads[idx];
+    const baseX = x(idx);
+    if (usedXs.some((ux) => Math.abs(ux - baseX) < minDx)) return;
+    const above = lead !== "B";
+    const yBase = above ? yLeft(p.left) - 4 : yRight(p.right) + 10;
+    labels.push({ x: baseX, y: yBase, text: `${p.left}-${p.right}` });
+    usedXs.push(baseX);
   });
 
   return (
