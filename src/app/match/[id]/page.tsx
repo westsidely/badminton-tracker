@@ -179,6 +179,7 @@ export default function MatchPage() {
   const [pendingZone, setPendingZone] = useState<string | null>(null);
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [reopenedJustNow, setReopenedJustNow] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
   const [endReasonChoice, setEndReasonChoice] = useState<EndReason | null>(null);
@@ -499,101 +500,6 @@ export default function MatchPage() {
             </p>
           ) : null;
         })()}
-
-        <section className="mx-4 mt-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-          <h2 className="mb-2 text-xs font-medium text-zinc-400 text-center">Current match breakdown</h2>
-          <div className="grid grid-cols-3 gap-1 text-[11px]">
-            <div />
-            <div className="text-center text-zinc-400">Team A</div>
-            <div className="text-center text-zinc-400">Team B</div>
-
-            <div className="text-zinc-500">Winners</div>
-            <div className="text-center text-zinc-50">{reasonStats.left.winner}</div>
-            <div className="text-center text-zinc-50">{reasonStats.right.winner}</div>
-
-            <div className="text-zinc-500">Unforced errors</div>
-            <div className="text-center text-zinc-50">{reasonStats.left.unforced}</div>
-            <div className="text-center text-zinc-50">{reasonStats.right.unforced}</div>
-
-            <div className="text-zinc-500">Forced errors</div>
-            <div className="text-center text-zinc-50">{reasonStats.left.forced}</div>
-            <div className="text-center text-zinc-50">{reasonStats.right.forced}</div>
-
-            <div className="text-zinc-500">Service errors</div>
-            <div className="text-center text-zinc-50">{reasonStats.left.service}</div>
-            <div className="text-center text-zinc-50">{reasonStats.right.service}</div>
-
-            <div className="text-zinc-500">Lucky shots</div>
-            <div className="text-center text-zinc-50">{reasonStats.left.lucky}</div>
-            <div className="text-center text-zinc-50">{reasonStats.right.lucky}</div>
-          </div>
-        </section>
-
-        <section className="mx-4 mt-3 space-y-2">
-          <p className="text-xs font-medium text-zinc-400 text-center">
-            Zone analysis – Team A ({challengerName})
-          </p>
-          <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-800 bg-zinc-900/60 p-0.5">
-            {Array.from({ length: 5 }).map((_, r) => (
-              <div key={r} className="grid grid-cols-5 gap-0.5">
-                {Array.from({ length: 5 }).map((__, c) => {
-                  const key = `A-${r + 1}-${c + 1}`;
-                  const counts = zoneStats[key];
-                  const hasData = counts && (counts.wins > 0 || counts.losses > 0);
-                  return (
-                    <div
-                      key={key}
-                      className="flex h-7 flex-col items-center justify-center rounded bg-zinc-900/80 text-[9px]"
-                    >
-                      {hasData && (
-                        <>
-                          {counts.wins > 0 && (
-                            <span className="text-emerald-400">+{counts.wins}</span>
-                          )}
-                          {counts.losses > 0 && (
-                            <span className="text-red-400">-{counts.losses}</span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          <p className="mt-2 text-xs font-medium text-zinc-400 text-center">
-            Zone analysis – Team B ({opponentName})
-          </p>
-          <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-800 bg-zinc-900/60 p-0.5">
-            {Array.from({ length: 5 }).map((_, r) => (
-              <div key={r} className="grid grid-cols-5 gap-0.5">
-                {Array.from({ length: 5 }).map((__, c) => {
-                  const key = `B-${r + 1}-${c + 1}`;
-                  const counts = zoneStats[key];
-                  const hasData = counts && (counts.wins > 0 || counts.losses > 0);
-                  return (
-                    <div
-                      key={key}
-                      className="flex h-7 flex-col items-center justify-center rounded bg-zinc-900/80 text-[9px]"
-                    >
-                      {hasData && (
-                        <>
-                          {counts.wins > 0 && (
-                            <span className="text-emerald-400">+{counts.wins}</span>
-                          )}
-                          {counts.losses > 0 && (
-                            <span className="text-red-400">-{counts.losses}</span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </section>
 
         {(derived.matchOver || (!inProgress && match.winner_side)) && (
           <p className="text-center text-emerald-400">
