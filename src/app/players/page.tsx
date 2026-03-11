@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 
-type PlayerRow = { id: string; display_name: string; represented_as?: string | null };
+type PlayerRow = { id: string; display_name: string; represented_as?: string | null; created_by?: string | null };
+type PlayerClaimRow = { player_id: string; claimed_by: string; status: "pending" | "approved" | "rejected"; created_at?: string; decided_at?: string | null; decided_by?: string | null };
 
 type LeaderboardRow = { player_id: string; verified_matches: number };
 type MatchRow = {
@@ -30,21 +31,23 @@ export default function PlayersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editRepresentedAs, setEditRepresentedAs] = useState("");
+  const [claimsByPlayer, setClaimsByPlayer] = useState<Record<string, PlayerClaimRow>>({});
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (!session) {
-        setLoading(false);
-        router.replace("/login");
-        return;
-      }
-      Promise.all([
-        supabase.from("players").select("id, display_name, represented_as").order("display_name"),
-        supabase.from("matches").select("challenger_id, opponent_id, challenger_2_id, opponent_2_id, winner_side, verification_status").eq("status", "completed"),
-        supabase.rpc("get_leaderboard"),
-      ]).then(([playersRes, matchesRes, lbRes]) => {
+  const loadData = useCallback(() => {
+    if (!session) return;
+    Promise.all([
+      supabase.from("players").select("id, display_name, represented_as, created_by").order("display_name"),
+      supabase.from("matches").select("challenger_id, opponent_id, challenger_2_id, opponent_2_id, winner_side, verification_status").eq("status", "completed"),
+      supabase.rpc("get_leaderboard"),
+      supabase.from("player_claims").select("player_id, claimed_by, status, created_at, decided_at, decided_by"),
+    ]).then(([playersRes, matchesRes, lbRes, claimsRes]) => {
         setPlayers((playersRes.data as PlayerRow[]) ?? []);
+        const claims = (claimsRes.data as PlayerClaimRow[] | null) ?? [];
+        const claimMap: Record<string, PlayerClaimRow> = {};
+        claims.forEach((c) => { claimMap[c.player_id] = c; });
+        setClaimsByPlayer(claimMap);
         const matches = (matchesRes.data as MatchRow[]) ?? [];
         const stats: Record<string, { wins: number; losses: number; verified: number }> = {};
         for (const m of matches) {
@@ -65,8 +68,22 @@ export default function PlayersPage() {
         setLeaderboardIds(new Set(lb.map((r) => r.player_id)));
         setLoading(false);
       });
+  }, [session]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (!session) {
+        setLoading(false);
+        router.replace("/login");
+        return;
+      }
     });
   }, [router]);
+
+  useEffect(() => {
+    if (session) loadData();
+  }, [session, loadData]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -80,8 +97,7 @@ export default function PlayersPage() {
     setCreating(false);
     if (error) return;
     setNewName("");
-    const { data } = await supabase.from("players").select("id, display_name, represented_as").order("display_name");
-    setPlayers((data as PlayerRow[]) ?? []);
+    loadData();
   };
 
   const handleUpdate = async (playerId: string) => {
@@ -100,6 +116,53 @@ export default function PlayersPage() {
     const s = playerStats[playerId];
     if (s?.verified && s.verified > 0) return `${s.verified} verified matches`;
     return null;
+  };
+
+  const getClaimStatus = (playerId: string): "unclaimed" | "pending" | "claimed" => {
+    const c = claimsByPlayer[playerId];
+    if (!c) return "unclaimed";
+    if (c.status === "approved") return "claimed";
+    if (c.status === "pending") return "pending";
+    return "unclaimed";
+  };
+
+  const isAdminFor = (player: PlayerRow) => session && player.created_by && player.created_by === session.user.id;
+  const isClaimedByMe = (playerId: string) => {
+    const c = claimsByPlayer[playerId];
+    return c?.status === "approved" && session && c.claimed_by === session.user.id;
+  };
+
+  const handleClaim = async (playerId: string) => {
+    if (!session) return;
+    setClaimingId(playerId);
+    const { error } = await supabase.from("player_claims").upsert(
+      { player_id: playerId, claimed_by: session.user.id, status: "pending" },
+      { onConflict: "player_id" }
+    );
+    setClaimingId(null);
+    if (!error) loadData();
+  };
+
+  const handleApprove = async (playerId: string) => {
+    if (!session) return;
+    setDecidingId(playerId);
+    const { error } = await supabase
+      .from("player_claims")
+      .update({ status: "approved", decided_at: new Date().toISOString(), decided_by: session.user.id })
+      .eq("player_id", playerId);
+    setDecidingId(null);
+    if (!error) loadData();
+  };
+
+  const handleReject = async (playerId: string) => {
+    if (!session) return;
+    setDecidingId(playerId);
+    const { error } = await supabase
+      .from("player_claims")
+      .update({ status: "rejected", decided_at: new Date().toISOString(), decided_by: session.user.id })
+      .eq("player_id", playerId);
+    setDecidingId(null);
+    if (!error) loadData();
   };
 
   if (loading || !session) {
@@ -187,24 +250,76 @@ export default function PlayersPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between gap-2">
-                    <Link
-                      href={`/stats?player=${p.id}`}
-                      className="min-w-0 flex-1 font-medium text-zinc-50 active:text-zinc-300"
-                    >
-                      {p.display_name}
-                    </Link>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {p.represented_as && <span className="text-xs text-zinc-500">({p.represented_as})</span>}
-                      <span className="text-sm text-zinc-400">{wins}–{losses}</span>
-                      {note && <span className="text-xs text-zinc-500">{note}</span>}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); setEditingId(p.id); setEditName(p.display_name); setEditRepresentedAs(p.represented_as ?? ""); }}
-                        className="text-xs text-zinc-400 underline"
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link
+                        href={`/stats?player=${p.id}`}
+                        className="min-w-0 flex-1 font-medium text-zinc-50 active:text-zinc-300"
                       >
-                        Edit
-                      </button>
+                        {p.display_name}
+                      </Link>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {p.represented_as && <span className="text-xs text-zinc-500">({p.represented_as})</span>}
+                        <span className="text-sm text-zinc-400">{wins}–{losses}</span>
+                        {note && <span className="text-xs text-zinc-500">{note}</span>}
+                        {isAdminFor(p) && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); setEditingId(p.id); setEditName(p.display_name); setEditRepresentedAs(p.represented_as ?? ""); }}
+                            className="text-xs text-zinc-400 underline"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {getClaimStatus(p.id) === "unclaimed" && (
+                        <>
+                          <span className="text-zinc-500">Unclaimed</span>
+                          <button
+                            type="button"
+                            disabled={claimingId === p.id}
+                            onClick={() => handleClaim(p.id)}
+                            className="rounded border border-zinc-600 px-2 py-0.5 text-zinc-300 active:bg-zinc-800 disabled:opacity-50"
+                          >
+                            {claimingId === p.id ? "Claiming…" : "Claim this profile"}
+                          </button>
+                        </>
+                      )}
+                      {getClaimStatus(p.id) === "pending" && (
+                        <>
+                          <span className="text-amber-400">Pending claim</span>
+                          {claimsByPlayer[p.id]?.claimed_by === session?.user?.id && (
+                            <span className="text-zinc-500">(yours)</span>
+                          )}
+                          {isAdminFor(p) && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={decidingId === p.id}
+                                onClick={() => handleApprove(p.id)}
+                                className="rounded bg-emerald-600/80 px-2 py-0.5 text-white disabled:opacity-50"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                disabled={decidingId === p.id}
+                                onClick={() => handleReject(p.id)}
+                                className="rounded border border-red-600/80 px-2 py-0.5 text-red-400 disabled:opacity-50"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                      {getClaimStatus(p.id) === "claimed" && (
+                        <span className={isClaimedByMe(p.id) ? "text-emerald-400" : "text-zinc-500"}>
+                          {isClaimedByMe(p.id) ? "Claimed by you" : "Claimed"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
