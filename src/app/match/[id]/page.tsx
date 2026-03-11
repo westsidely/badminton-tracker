@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { deriveScore, buildCurrentGameProgression, normalizeEntry, prefixCompletedGames, validateGameScore, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
-import { getPlayerDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
+import { getTeamDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
 import { getLocationName } from "@/lib/locationDisplay";
 import { PointProgressionChart } from "@/components/PointProgressionChart";
 
@@ -43,15 +43,28 @@ type MatchRow = {
   match_type?: string | null;
   tournament_name?: string | null;
   location_id?: string | null;
+  match_format?: string | null;
   challenger_id?: string;
   opponent_id?: string;
+  challenger_2_id?: string | null;
+  opponent_2_id?: string | null;
   challenger?: unknown;
   opponent?: unknown;
+  challenger_2?: unknown;
+  opponent_2?: unknown;
   location?: { name: string }[];
 };
 
 const LAYOUT_KEY = "badminton-match-layout";
 const POINT_TYPES_KEY = "badminton-point-types-on";
+
+const MATCH_FORMAT_LABELS: Record<string, string> = {
+  mens_singles: "Men's Singles",
+  womens_singles: "Women's Singles",
+  mens_doubles: "Men's Doubles",
+  womens_doubles: "Women's Doubles",
+  mixed_doubles: "Mixed Doubles",
+};
 
 type LayoutMode = 0 | 1 | 2 | 3; // 0: vert A near, 1: vert B near, 2: horiz A left, 3: horiz B left
 
@@ -196,7 +209,7 @@ export default function MatchPage() {
   const fetchMatch = useCallback(async () => {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, end_reason, location_id, match_type, tournament_name, challenger_id, opponent_id, challenger:players!challenger_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent:players!opponent_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), location:locations!location_id(name)")
+      .select("id, status, created_at, created_by, score_state, winner_side, verification_status, end_reason, location_id, match_type, tournament_name, match_format, challenger_id, opponent_id, challenger_2_id, opponent_2_id, challenger:players!challenger_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent:players!opponent_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), challenger_2:players!challenger_2_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent_2:players!opponent_2_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), location:locations!location_id(name)")
       .eq("id", id)
       .single();
     if (error || !data) {
@@ -220,7 +233,9 @@ export default function MatchPage() {
   const isAdmin = !!session && !!match && match.created_by === session.user.id;
   const [playerOptions, setPlayerOptions] = useState<{ id: string; display_name: string }[]>([]);
   const [editChallengerId, setEditChallengerId] = useState("");
+  const [editChallenger2Id, setEditChallenger2Id] = useState("");
   const [editOpponentId, setEditOpponentId] = useState("");
+  const [editOpponent2Id, setEditOpponent2Id] = useState("");
 
   useEffect(() => {
     if (!showEdit || !session) return;
@@ -358,9 +373,23 @@ export default function MatchPage() {
   };
 
   const saveEdit = async () => {
-    if (!match || !editChallengerId || !editOpponentId || editChallengerId === editOpponentId || saving) return;
+    if (!match || !editChallengerId || !editOpponentId || saving) return;
+    if (editChallengerId === editOpponentId) return;
+    const doubles = !!(match.challenger_2_id ?? match.opponent_2_id);
+    if (doubles) {
+      if (!editChallenger2Id || !editOpponent2Id) return;
+      if (editChallengerId === editChallenger2Id || editOpponentId === editOpponent2Id) return;
+    }
     setSaving(true);
-    const { error } = await supabase.from("matches").update({ challenger_id: editChallengerId, opponent_id: editOpponentId }).eq("id", id);
+    const update: Record<string, string | null> = { challenger_id: editChallengerId, opponent_id: editOpponentId };
+    if (doubles) {
+      update.challenger_2_id = editChallenger2Id;
+      update.opponent_2_id = editOpponent2Id;
+    } else {
+      update.challenger_2_id = null;
+      update.opponent_2_id = null;
+    }
+    const { error } = await supabase.from("matches").update(update).eq("id", id);
     setSaving(false);
     if (error) return;
     setShowEdit(false);
@@ -386,8 +415,9 @@ export default function MatchPage() {
   const history = match.score_state?.pointHistory ?? [];
   const derived = deriveScore(history);
   const inProgress = match.status === "in_progress";
-  const challengerName = getPlayerDisplayName(match.challenger, match.challenger_id);
-  const opponentName = getPlayerDisplayName(match.opponent, match.opponent_id);
+  const challengerName = getTeamDisplayName(match.challenger, match.challenger_id, match.challenger_2, match.challenger_2_id);
+  const opponentName = getTeamDisplayName(match.opponent, match.opponent_id, match.opponent_2, match.opponent_2_id);
+  const isDoubles = !!(match.challenger_2_id || match.opponent_2_id);
   const matchLocationName = getLocationName(match.location);
 
   const reasonStats = {
@@ -432,14 +462,14 @@ export default function MatchPage() {
     <div className="flex min-h-screen flex-col bg-zinc-950">
       <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <Link href="/matches" className="text-sm text-zinc-400 underline active:text-zinc-300">← Matches</Link>
-        <span className="text-sm text-zinc-500">
+        <span className="text-sm text-zinc-500 text-center">
           {challengerName}
-          {getPlayerRepresentationLabel(match.challenger) && (
+          {!isDoubles && getPlayerRepresentationLabel(match.challenger) && (
             <span className="ml-1 text-xs text-zinc-400">({getPlayerRepresentationLabel(match.challenger)})</span>
           )}{" "}
           vs{" "}
           {opponentName}
-          {getPlayerRepresentationLabel(match.opponent) && (
+          {!isDoubles && getPlayerRepresentationLabel(match.opponent) && (
             <span className="ml-1 text-xs text-zinc-400">({getPlayerRepresentationLabel(match.opponent)})</span>
           )}
         </span>
@@ -450,6 +480,9 @@ export default function MatchPage() {
           <p className="px-4 pt-2 text-center text-xs text-zinc-500">{formatMatchStart(match.created_at)}</p>
         )}
         <p className="px-4 text-center text-xs text-zinc-500">
+          {match.match_format && (
+            <span className="mr-1.5 font-medium text-zinc-400">{MATCH_FORMAT_LABELS[match.match_format] ?? match.match_format}</span>
+          )}
           {match.match_type === "tournament"
             ? `Tournament${match.tournament_name?.trim() ? ` · ${match.tournament_name.trim()}` : " · Tournament match"} · ${matchLocationName ?? "No venue indicated"}`
             : `Recreational · ${matchLocationName ?? "No venue indicated"}`}
@@ -846,7 +879,9 @@ export default function MatchPage() {
                   type="button"
                   onClick={() => {
                     setEditChallengerId(match.challenger_id ?? "");
+                    setEditChallenger2Id(match.challenger_2_id ?? "");
                     setEditOpponentId(match.opponent_id ?? "");
+                    setEditOpponent2Id(match.opponent_2_id ?? "");
                     setShowEdit(true);
                   }}
                   className="w-full rounded-lg border border-zinc-600 py-2 text-sm font-medium text-zinc-300"
@@ -873,11 +908,11 @@ export default function MatchPage() {
 
         {showEdit && isAdmin && (
           <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Edit match">
-            <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
+            <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg max-h-[85vh] overflow-y-auto">
               <h2 className="mb-3 text-sm font-semibold text-zinc-50">Edit match</h2>
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1 block text-xs text-zinc-400">Challenger</label>
+                  <label className="mb-1 block text-xs text-zinc-400">Team A — Player 1</label>
                   <select
                     value={editChallengerId}
                     onChange={(e) => setEditChallengerId(e.target.value)}
@@ -888,8 +923,22 @@ export default function MatchPage() {
                     ))}
                   </select>
                 </div>
+                {isDoubles && (
+                  <div>
+                    <label className="mb-1 block text-xs text-zinc-400">Team A — Player 2</label>
+                    <select
+                      value={editChallenger2Id}
+                      onChange={(e) => setEditChallenger2Id(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50"
+                    >
+                      {playerOptions.map((p) => (
+                        <option key={p.id} value={p.id}>{p.display_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
-                  <label className="mb-1 block text-xs text-zinc-400">Opponent</label>
+                  <label className="mb-1 block text-xs text-zinc-400">Team B — Player 1</label>
                   <select
                     value={editOpponentId}
                     onChange={(e) => setEditOpponentId(e.target.value)}
@@ -900,11 +949,31 @@ export default function MatchPage() {
                     ))}
                   </select>
                 </div>
+                {isDoubles && (
+                  <div>
+                    <label className="mb-1 block text-xs text-zinc-400">Team B — Player 2</label>
+                    <select
+                      value={editOpponent2Id}
+                      onChange={(e) => setEditOpponent2Id(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-50"
+                    >
+                      {playerOptions.map((p) => (
+                        <option key={p.id} value={p.id}>{p.display_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={saveEdit}
-                    disabled={saving || !editChallengerId || !editOpponentId || editChallengerId === editOpponentId}
+                    disabled={
+                      saving ||
+                      !editChallengerId ||
+                      !editOpponentId ||
+                      editChallengerId === editOpponentId ||
+                      (isDoubles && (!editChallenger2Id || !editOpponent2Id || editChallengerId === editChallenger2Id || editOpponentId === editOpponent2Id))
+                    }
                     className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white disabled:opacity-60"
                   >
                     Save

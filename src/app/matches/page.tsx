@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import type { Session } from "@supabase/supabase-js";
 import { deriveScore, type PointSide } from "@/lib/scoreUtils";
-import { getPlayerDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
+import { getTeamDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
 import { getLocationName } from "@/lib/locationDisplay";
 
 type MatchRow = {
@@ -21,8 +21,12 @@ type MatchRow = {
   tournament_name?: string | null;
   challenger_id?: string;
   opponent_id?: string;
+  challenger_2_id?: string | null;
+  opponent_2_id?: string | null;
   challenger?: unknown;
   opponent?: unknown;
+  challenger_2?: unknown;
+  opponent_2?: unknown;
   location_id?: string | null;
   location?: { name: string }[];
 };
@@ -70,7 +74,7 @@ export default function MatchesPage() {
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
         supabase
           .from("matches")
-          .select("id, status, created_at, score_state, verification_status, end_reason, winner_side, challenger_id, opponent_id, location_id, match_type, tournament_name, challenger:players!challenger_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent:players!opponent_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), location:locations!location_id(name)")
+          .select("id, status, created_at, score_state, verification_status, end_reason, winner_side, challenger_id, opponent_id, challenger_2_id, opponent_2_id, location_id, match_type, tournament_name, challenger:players!challenger_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent:players!opponent_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), challenger_2:players!challenger_2_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), opponent_2:players!opponent_2_id(display_name, represented_as, club_affiliation, school_affiliation, corporate_affiliation, city, country), location:locations!location_id(name)")
           .order("created_at", { ascending: false }),
       ]).then(([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
@@ -101,8 +105,8 @@ export default function MatchesPage() {
     const q = searchQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((m) => {
-        const challenger = getPlayerDisplayName(m.challenger, m.challenger_id).toLowerCase();
-        const opponent = getPlayerDisplayName(m.opponent, m.opponent_id).toLowerCase();
+        const challenger = getTeamDisplayName(m.challenger, m.challenger_id, m.challenger_2, m.challenger_2_id).toLowerCase();
+        const opponent = getTeamDisplayName(m.opponent, m.opponent_id, m.opponent_2, m.opponent_2_id).toLowerCase();
         const dateStr = formatMatchDate(m.created_at).toLowerCase();
         const locationName = (getLocationName(m.location) ?? "").toLowerCase();
         const tournament = (m.tournament_name ?? "").toLowerCase();
@@ -234,13 +238,13 @@ export default function MatchesPage() {
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">
-                      {getPlayerDisplayName(m.challenger, m.challenger_id)}
-                      {getPlayerRepresentationLabel(m.challenger) && (
+                      {getTeamDisplayName(m.challenger, m.challenger_id, m.challenger_2, m.challenger_2_id)}
+                      {!m.challenger_2_id && getPlayerRepresentationLabel(m.challenger) && (
                         <span className="ml-1 text-xs font-normal text-zinc-400">({getPlayerRepresentationLabel(m.challenger)})</span>
                       )}{" "}
                       vs{" "}
-                      {getPlayerDisplayName(m.opponent, m.opponent_id)}
-                      {getPlayerRepresentationLabel(m.opponent) && (
+                      {getTeamDisplayName(m.opponent, m.opponent_id, m.opponent_2, m.opponent_2_id)}
+                      {!m.opponent_2_id && getPlayerRepresentationLabel(m.opponent) && (
                         <span className="ml-1 text-xs font-normal text-zinc-400">({getPlayerRepresentationLabel(m.opponent)})</span>
                       )}
                     </span>

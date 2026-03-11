@@ -51,3 +51,20 @@ export function getPlayerDisplayName(
   if (playerId) return playerId.slice(0, 8);
   return "Unknown player";
 }
+
+/**
+ * Display label for a team: one name (singles) or "Name1 / Name2" (doubles).
+ */
+export function getTeamDisplayName(
+  primaryJoined: unknown,
+  primaryId: string | undefined,
+  secondaryJoined?: unknown,
+  secondaryId?: string | undefined
+): string {
+  const a = getPlayerDisplayName(primaryJoined, primaryId);
+  if (secondaryJoined != null || secondaryId) {
+    const b = getPlayerDisplayName(secondaryJoined, secondaryId);
+    if (b && b !== "Unknown player") return `${a} / ${b}`;
+  }
+  return a;
+}
