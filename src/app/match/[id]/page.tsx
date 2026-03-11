@@ -4,22 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { deriveScore, POINT_REASONS, buildCurrentGameProgression, normalizeEntry, prefixCompletedGames, validateGameScore, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
+import { deriveScore, buildCurrentGameProgression, normalizeEntry, prefixCompletedGames, validateGameScore, type PointEntry, type PointReason, type PointSide } from "@/lib/scoreUtils";
 import { getPlayerDisplayName, getPlayerRepresentationLabel } from "@/lib/playerDisplay";
 import { getLocationName } from "@/lib/locationDisplay";
 import { PointProgressionChart } from "@/components/PointProgressionChart";
-
-function getReasonLabel(reason: PointReason, otherName: string): string {
-  const whoErred = otherName; // the one who made the error
-  switch (reason) {
-    case "winner": return "Winner";
-    case "opponent_unforced_error": return `Unforced error by ${whoErred}`;
-    case "forced_error": return `Forced error by ${whoErred} (your shot pressured them into the error)`;
-    case "service_error": return `Service error by ${whoErred}`;
-    case "lucky": return "Lucky shot";
-    default: return reason;
-  }
-}
 
 function normalizeHistory(raw: unknown): PointEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -169,7 +157,6 @@ export default function MatchPage() {
   const [session, setSession] = useState<{ user: { id: string } } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [pendingSide, setPendingSide] = useState<PointSide | null>(null);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(0);
   const [recordPointTypes, setRecordPointTypes] = useState(true);
   const [showEditScore, setShowEditScore] = useState(false);
@@ -244,7 +231,6 @@ export default function MatchPage() {
 
   const addPoint = async (side: PointSide, reason: PointReason, zone?: string | null) => {
     if (!match || match.status !== "in_progress" || saving) return;
-    setPendingSide(null);
     const history = [
       ...(match.score_state?.pointHistory ?? []),
       { side, reason, zone: zone ?? null },
@@ -308,7 +294,6 @@ export default function MatchPage() {
 
   const undo = async () => {
     if (!match || match.status !== "in_progress" || saving) return;
-    setPendingSide(null);
     const history = match.score_state?.pointHistory ?? [];
     if (history.length === 0) return;
     const next = history.slice(0, -1);
@@ -327,7 +312,6 @@ export default function MatchPage() {
     setShowEndModal(false);
     setEndReasonChoice(null);
     setEndWinnerSide(null);
-    setPendingSide(null);
     setSaving(true);
     const derived = deriveScore(match.score_state?.pointHistory ?? []);
     const winner =
@@ -491,15 +475,6 @@ export default function MatchPage() {
         </div>
 
         <PointProgressionChart data={buildCurrentGameProgression(history)} />
-        {(() => {
-          const lastWithZone = [...history].reverse().find((p) => (p as PointEntry).zone);
-          const zone = (lastWithZone as PointEntry | undefined)?.zone;
-          return zone ? (
-            <p className="px-4 text-center text-[10px] text-zinc-500">
-              Last recorded action zone: {zone}
-            </p>
-          ) : null;
-        })()}
 
         {(derived.matchOver || (!inProgress && match.winner_side)) && (
           <p className="text-center text-emerald-400">
@@ -554,58 +529,69 @@ export default function MatchPage() {
             {recordPointTypes ? (
               <>
                 <div className="px-4 pb-2 text-center text-xs text-zinc-500">
-                  Tap a zone to award a point, then choose reason.
+                  Tap a zone on the court, then choose who got the point.
                 </div>
-                <div className="mx-4 space-y-3">
-                  <p className="text-center text-xs font-medium text-zinc-400">
-                    Team A ({challengerName})
-                  </p>
-                  <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-900/60 p-0.5">
-                    {Array.from({ length: 5 }).map((_, r) => (
-                      <div key={r} className="grid grid-cols-5 gap-0.5">
-                        {Array.from({ length: 5 }).map((__, c) => {
-                          const zone = `A-${r + 1}-${c + 1}`;
-                          return (
-                            <button
-                              key={zone}
-                              type="button"
-                              onClick={() => {
-                                if (derived.matchOver || saving) return;
-                                setPendingSide("left");
-                                setPendingZone(zone);
-                                setShowReasonModal(true);
-                              }}
-                              className="h-7 rounded bg-zinc-800/80 active:bg-zinc-700"
-                            />
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-1 text-center text-xs font-medium text-zinc-400">
-                    Team B ({opponentName})
-                  </p>
-                  <div className="grid grid-rows-5 gap-0.5 rounded border border-zinc-700 bg-zinc-900/60 p-0.5">
-                    {Array.from({ length: 5 }).map((_, r) => (
-                      <div key={r} className="grid grid-cols-5 gap-0.5">
-                        {Array.from({ length: 5 }).map((__, c) => {
-                          const zone = `B-${r + 1}-${c + 1}`;
-                          return (
-                            <button
-                              key={zone}
-                              type="button"
-                              onClick={() => {
-                                if (derived.matchOver || saving) return;
-                                setPendingSide("right");
-                                setPendingZone(zone);
-                                setShowReasonModal(true);
-                              }}
-                              className="h-7 rounded bg-zinc-800/80 active:bg-zinc-700"
-                            />
-                          );
-                        })}
-                      </div>
-                    ))}
+                <div className="mx-4">
+                  <div className="rounded-xl border-2 border-zinc-600 bg-zinc-900/80 overflow-hidden shadow-inner">
+                    <p className="py-1.5 text-center text-xs font-semibold text-zinc-300 bg-zinc-800/80 border-b border-zinc-600">
+                      Team A — {challengerName}
+                    </p>
+                    <div className="grid grid-rows-5 gap-0.5 p-1 bg-zinc-800/40">
+                      {Array.from({ length: 5 }).map((_, r) => (
+                        <div key={r} className="grid grid-cols-5 gap-0.5">
+                          {Array.from({ length: 5 }).map((__, c) => {
+                            const zone = `A-${r + 1}-${c + 1}`;
+                            const stats = zoneStats[zone] ?? { wins: 0, losses: 0 };
+                            return (
+                              <button
+                                key={zone}
+                                type="button"
+                                onClick={() => {
+                                  if (derived.matchOver || saving) return;
+                                  setPendingZone(zone);
+                                  setShowReasonModal(true);
+                                }}
+                                className="relative flex h-9 min-w-0 flex-col items-center justify-center rounded bg-zinc-800/90 text-xs font-bold active:bg-zinc-700 touch-manipulation"
+                              >
+                                {stats.wins > 0 && <span className="text-emerald-400 leading-tight">+{stats.wins}</span>}
+                                {stats.losses > 0 && <span className="text-red-400 leading-tight">−{stats.losses}</span>}
+                                {stats.wins === 0 && stats.losses === 0 && <span className="text-zinc-500">·</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="h-0.5 bg-zinc-600 shrink-0" aria-hidden />
+                    <p className="py-1.5 text-center text-xs font-semibold text-zinc-300 bg-zinc-800/80 border-t border-zinc-600">
+                      Team B — {opponentName}
+                    </p>
+                    <div className="grid grid-rows-5 gap-0.5 p-1 bg-zinc-800/40">
+                      {Array.from({ length: 5 }).map((_, r) => (
+                        <div key={r} className="grid grid-cols-5 gap-0.5">
+                          {Array.from({ length: 5 }).map((__, c) => {
+                            const zone = `B-${r + 1}-${c + 1}`;
+                            const stats = zoneStats[zone] ?? { wins: 0, losses: 0 };
+                            return (
+                              <button
+                                key={zone}
+                                type="button"
+                                onClick={() => {
+                                  if (derived.matchOver || saving) return;
+                                  setPendingZone(zone);
+                                  setShowReasonModal(true);
+                                }}
+                                className="relative flex h-9 min-w-0 flex-col items-center justify-center rounded bg-zinc-800/90 text-xs font-bold active:bg-zinc-700 touch-manipulation"
+                              >
+                                {stats.wins > 0 && <span className="text-emerald-400 leading-tight">+{stats.wins}</span>}
+                                {stats.losses > 0 && <span className="text-red-400 leading-tight">−{stats.losses}</span>}
+                                {stats.wins === 0 && stats.losses === 0 && <span className="text-zinc-500">·</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </>
@@ -630,33 +616,61 @@ export default function MatchPage() {
               </>
             )}
 
-            {showReasonModal && pendingSide !== null && (
-              <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Point reason">
+            {showReasonModal && pendingZone !== null && (
+              <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Who got the point?">
                 <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
                   <p className="mb-3 text-center text-sm font-medium text-zinc-50">
-                    Award point to {pendingSide === "left" ? challengerName : opponentName}
+                    Who got the point?
                   </p>
                   <div className="grid gap-2">
-                    {POINT_REASONS.map((reason) => (
-                      <button
-                        key={reason}
-                        type="button"
-                        onClick={() => {
-                          addPoint(pendingSide, reason, pendingZone);
-                          setShowReasonModal(false);
-                          setPendingSide(null);
-                          setPendingZone(null);
-                        }}
-                        className="rounded-xl bg-zinc-800 py-3 text-left text-sm text-zinc-50 touch-manipulation active:bg-zinc-700"
-                      >
-                        {getReasonLabel(reason, pendingSide === "left" ? opponentName : challengerName)}
-                      </button>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addPoint("left", "winner", pendingZone);
+                        setShowReasonModal(false);
+                        setPendingZone(null);
+                      }}
+                      className="rounded-xl bg-zinc-800 py-3 text-center text-sm font-medium text-zinc-50 touch-manipulation active:bg-zinc-700"
+                    >
+                      Winner by Team A ({challengerName})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addPoint("right", "winner", pendingZone);
+                        setShowReasonModal(false);
+                        setPendingZone(null);
+                      }}
+                      className="rounded-xl bg-zinc-800 py-3 text-center text-sm font-medium text-zinc-50 touch-manipulation active:bg-zinc-700"
+                    >
+                      Winner by Team B ({opponentName})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addPoint("right", "opponent_unforced_error", pendingZone);
+                        setShowReasonModal(false);
+                        setPendingZone(null);
+                      }}
+                      className="rounded-xl bg-zinc-800 py-3 text-center text-sm font-medium text-zinc-50 touch-manipulation active:bg-zinc-700"
+                    >
+                      Error by Team A → point to B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addPoint("left", "opponent_unforced_error", pendingZone);
+                        setShowReasonModal(false);
+                        setPendingZone(null);
+                      }}
+                      className="rounded-xl bg-zinc-800 py-3 text-center text-sm font-medium text-zinc-50 touch-manipulation active:bg-zinc-700"
+                    >
+                      Error by Team B → point to A
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
                         setShowReasonModal(false);
-                        setPendingSide(null);
                         setPendingZone(null);
                       }}
                       className="rounded-xl border border-zinc-600 py-2.5 text-sm text-zinc-400 touch-manipulation"
@@ -693,6 +707,24 @@ export default function MatchPage() {
                 End match
               </button>
             </div>
+
+            <div className="border-t border-zinc-800 px-4 pb-4">
+              <button
+                type="button"
+                onClick={() => setShowAnalysis((a) => !a)}
+                className="w-full py-2 text-center text-xs font-medium text-zinc-400 active:text-zinc-300"
+              >
+                {showAnalysis ? "Hide analysis" : "Show analysis"}
+              </button>
+              {showAnalysis && (
+                <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 text-xs text-zinc-400 space-y-2">
+                  <p className="font-medium text-zinc-300">Point breakdown</p>
+                  <p>Team A: {reasonStats.left.winner} winners, {reasonStats.left.unforced + reasonStats.left.forced + reasonStats.left.service + reasonStats.left.lucky} errors conceded</p>
+                  <p>Team B: {reasonStats.right.winner} winners, {reasonStats.right.unforced + reasonStats.right.forced + reasonStats.right.service + reasonStats.right.lucky} errors conceded</p>
+                </div>
+              )}
+            </div>
+
             {showEditScore && (
               <div className="fixed inset-0 z-10 flex items-end justify-center bg-black/60 p-4 pb-8" role="dialog" aria-modal="true" aria-label="Edit score">
                 <div className="w-full max-w-sm rounded-t-2xl bg-zinc-900 p-4 shadow-lg">
