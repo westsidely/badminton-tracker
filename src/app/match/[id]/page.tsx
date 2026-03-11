@@ -415,8 +415,18 @@ export default function MatchPage() {
   const history = match.score_state?.pointHistory ?? [];
   const derived = deriveScore(history);
   const inProgress = match.status === "in_progress";
-  const challengerName = getTeamDisplayName(match.challenger, match.challenger_id, match.challenger_2, match.challenger_2_id);
-  const opponentName = getTeamDisplayName(match.opponent, match.opponent_id, match.opponent_2, match.opponent_2_id);
+  const challengerName = getTeamDisplayName(
+    match.challenger ?? undefined,
+    match.challenger_id ?? undefined,
+    match.challenger_2 ?? undefined,
+    match.challenger_2_id ?? undefined
+  );
+  const opponentName = getTeamDisplayName(
+    match.opponent ?? undefined,
+    match.opponent_id ?? undefined,
+    match.opponent_2 ?? undefined,
+    match.opponent_2_id ?? undefined
+  );
   const isDoubles = !!(match.challenger_2_id || match.opponent_2_id);
   const matchLocationName = getLocationName(match.location);
 
