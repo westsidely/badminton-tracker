@@ -105,8 +105,18 @@ export default function MatchesPage() {
     const q = searchQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((m) => {
-        const challenger = getTeamDisplayName(m.challenger, m.challenger_id, m.challenger_2, m.challenger_2_id).toLowerCase();
-        const opponent = getTeamDisplayName(m.opponent, m.opponent_id, m.opponent_2, m.opponent_2_id).toLowerCase();
+        const challenger = getTeamDisplayName(
+          m.challenger ?? undefined,
+          m.challenger_id ?? undefined,
+          m.challenger_2 ?? undefined,
+          m.challenger_2_id ?? undefined
+        ).toLowerCase();
+        const opponent = getTeamDisplayName(
+          m.opponent ?? undefined,
+          m.opponent_id ?? undefined,
+          m.opponent_2 ?? undefined,
+          m.opponent_2_id ?? undefined
+        ).toLowerCase();
         const dateStr = formatMatchDate(m.created_at).toLowerCase();
         const locationName = (getLocationName(m.location) ?? "").toLowerCase();
         const tournament = (m.tournament_name ?? "").toLowerCase();
@@ -238,12 +248,22 @@ export default function MatchesPage() {
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">
-                      {getTeamDisplayName(m.challenger, m.challenger_id, m.challenger_2, m.challenger_2_id)}
+                      {getTeamDisplayName(
+                        m.challenger ?? undefined,
+                        m.challenger_id ?? undefined,
+                        m.challenger_2 ?? undefined,
+                        m.challenger_2_id ?? undefined
+                      )}
                       {!m.challenger_2_id && getPlayerRepresentationLabel(m.challenger) && (
                         <span className="ml-1 text-xs font-normal text-zinc-400">({getPlayerRepresentationLabel(m.challenger)})</span>
                       )}{" "}
                       vs{" "}
-                      {getTeamDisplayName(m.opponent, m.opponent_id, m.opponent_2, m.opponent_2_id)}
+                      {getTeamDisplayName(
+                        m.opponent ?? undefined,
+                        m.opponent_id ?? undefined,
+                        m.opponent_2 ?? undefined,
+                        m.opponent_2_id ?? undefined
+                      )}
                       {!m.opponent_2_id && getPlayerRepresentationLabel(m.opponent) && (
                         <span className="ml-1 text-xs font-normal text-zinc-400">({getPlayerRepresentationLabel(m.opponent)})</span>
                       )}
