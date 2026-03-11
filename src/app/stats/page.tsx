@@ -19,6 +19,8 @@ type MatchRow = {
   id: string;
   challenger_id: string;
   opponent_id: string;
+  challenger_2_id?: string | null;
+  opponent_2_id?: string | null;
   status: string;
   winner_side: string | null;
   score_state: { pointHistory?: unknown[] };
@@ -56,7 +58,7 @@ function StatsContent() {
       }
       Promise.all([
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single(),
-        supabase.from("matches").select("id, challenger_id, opponent_id, status, winner_side, score_state, verification_status").eq("status", "completed"),
+        supabase.from("matches").select("id, challenger_id, opponent_id, challenger_2_id, opponent_2_id, status, winner_side, score_state, verification_status").eq("status", "completed"),
       ]).then(async ([profileRes, matchesRes]) => {
         setProfile((profileRes.data as { display_name: string | null }) ?? null);
         const rows = (matchesRes.data as MatchRow[] | null) ?? [];
@@ -65,6 +67,8 @@ function StatsContent() {
         rows.forEach((m) => {
           playerIds.add(m.challenger_id);
           playerIds.add(m.opponent_id);
+          if (m.challenger_2_id) playerIds.add(m.challenger_2_id);
+          if (m.opponent_2_id) playerIds.add(m.opponent_2_id);
         });
         if (playerFromUrl) playerIds.add(playerFromUrl);
         if (playerIds.size > 0) {
@@ -91,7 +95,13 @@ function StatsContent() {
   const selectedPlayer = playerOptions.find((p) => p.id === selectedPlayerId);
 
   const playerMatches = selectedPlayerId
-    ? matches.filter((m) => m.challenger_id === selectedPlayerId || m.opponent_id === selectedPlayerId)
+    ? matches.filter(
+        (m) =>
+          m.challenger_id === selectedPlayerId ||
+          m.opponent_id === selectedPlayerId ||
+          m.challenger_2_id === selectedPlayerId ||
+          m.opponent_2_id === selectedPlayerId
+      )
     : [];
   let totalMatches = 0;
   let wins = 0;
@@ -111,15 +121,17 @@ function StatsContent() {
     if (m.status !== "completed") continue;
     totalMatches++;
     if (m.verification_status === "verified") verifiedCount++;
-    const isChallenger = m.challenger_id === selectedPlayerId;
-    if (m.winner_side === "left" && isChallenger) wins++;
-    else if (m.winner_side === "right" && !isChallenger) wins++;
+    const isLeftSide =
+      m.challenger_id === selectedPlayerId || m.challenger_2_id === selectedPlayerId;
+    if (m.winner_side === "left" && isLeftSide) wins++;
+    else if (m.winner_side === "right" && !isLeftSide) wins++;
     else if (m.winner_side) losses++;
 
     const history = m.score_state?.pointHistory ?? [];
     for (const raw of history) {
       const entry = normalizeEntry(raw);
-      const pointIsForPlayer = (entry.side === "left" && isChallenger) || (entry.side === "right" && !isChallenger);
+      const pointIsForPlayer =
+        (entry.side === "left" && isLeftSide) || (entry.side === "right" && !isLeftSide);
       if (pointIsForPlayer) {
         pointsScored++;
         byReason[entry.reason]++;

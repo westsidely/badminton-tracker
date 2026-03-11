@@ -9,7 +9,14 @@ import type { Session } from "@supabase/supabase-js";
 type PlayerRow = { id: string; display_name: string; represented_as?: string | null };
 
 type LeaderboardRow = { player_id: string; verified_matches: number };
-type MatchRow = { challenger_id: string; opponent_id: string; winner_side: string | null; verification_status?: string };
+type MatchRow = {
+  challenger_id: string;
+  opponent_id: string;
+  challenger_2_id?: string | null;
+  opponent_2_id?: string | null;
+  winner_side: string | null;
+  verification_status?: string;
+};
 
 export default function PlayersPage() {
   const router = useRouter();
@@ -34,17 +41,19 @@ export default function PlayersPage() {
       }
       Promise.all([
         supabase.from("players").select("id, display_name, represented_as").order("display_name"),
-        supabase.from("matches").select("challenger_id, opponent_id, winner_side, verification_status").eq("status", "completed"),
+        supabase.from("matches").select("challenger_id, opponent_id, challenger_2_id, opponent_2_id, winner_side, verification_status").eq("status", "completed"),
         supabase.rpc("get_leaderboard"),
       ]).then(([playersRes, matchesRes, lbRes]) => {
         setPlayers((playersRes.data as PlayerRow[]) ?? []);
         const matches = (matchesRes.data as MatchRow[]) ?? [];
         const stats: Record<string, { wins: number; losses: number; verified: number }> = {};
         for (const m of matches) {
-          for (const pid of [m.challenger_id, m.opponent_id]) {
+          const leftIds = [m.challenger_id, m.challenger_2_id].filter(Boolean) as string[];
+          const rightIds = [m.opponent_id, m.opponent_2_id].filter(Boolean) as string[];
+          for (const pid of [...leftIds, ...rightIds]) {
             if (!pid) continue;
             if (!stats[pid]) stats[pid] = { wins: 0, losses: 0, verified: 0 };
-            const isLeft = m.challenger_id === pid;
+            const isLeft = leftIds.includes(pid);
             const won = (m.winner_side === "left" && isLeft) || (m.winner_side === "right" && !isLeft);
             if (won) stats[pid].wins++;
             else if (m.winner_side) stats[pid].losses++;
